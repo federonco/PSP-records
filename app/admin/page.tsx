@@ -97,6 +97,14 @@ type CompactionReportRow = {
   const [selectedLocationEditId, setSelectedLocationEditId] = useState<
     string | null
   >(null);
+  const getAccessToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) {
+      return data.session.access_token;
+    }
+    const refreshed = await supabase.auth.refreshSession();
+    return refreshed.data.session?.access_token ?? null;
+  };
   const selectedLocation = useMemo(
     () => locations.find((loc) => loc.id === locationId),
     [locationId, locations],
@@ -209,8 +217,16 @@ type CompactionReportRow = {
   const syncCompactionReports = async () => {
     if (!locationId || !authEmail) return;
     setSyncingReports(true);
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      setSyncingReports(false);
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before syncing compaction reports.",
+      });
+      return;
+    }
     const response = await fetch("/api/psp/compaction-reports/sync", {
       method: "POST",
       headers: {
@@ -340,8 +356,15 @@ type CompactionReportRow = {
       });
       return;
     }
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before sending reports.",
+      });
+      return;
+    }
     const response = await fetch("/api/reports/itr-exb-003/email", {
       method: "POST",
       headers: {
@@ -374,8 +397,16 @@ type CompactionReportRow = {
   const handleAuditReportAll = async () => {
     if (!locationId || !authEmail) return;
     setLoading(true);
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      setLoading(false);
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before generating audit reports.",
+      });
+      return;
+    }
     const response = await fetch("/api/psp/audit-report", {
       method: "POST",
       headers: {
@@ -444,8 +475,16 @@ type CompactionReportRow = {
 
    const handleSignOffBlock = async (block: BlockInfo) => {
      setLoading(true);
-     const session = await supabase.auth.getSession();
-     const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      setLoading(false);
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before signing off blocks.",
+      });
+      return;
+    }
      const response = await fetch("/api/psp/signoff-block", {
        method: "POST",
        headers: {
@@ -483,8 +522,16 @@ type CompactionReportRow = {
 
   const handleAuditReport = async (block: BlockInfo) => {
      setLoading(true);
-     const session = await supabase.auth.getSession();
-     const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      setLoading(false);
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before generating audit reports.",
+      });
+      return;
+    }
      const response = await fetch("/api/psp/audit-report", {
        method: "POST",
        headers: {
@@ -547,8 +594,16 @@ type CompactionReportRow = {
 
   const handleCompactionReport = async (block: BlockInfo) => {
     setLoading(true);
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      setLoading(false);
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before generating reports.",
+      });
+      return;
+    }
     const response = await fetch("/api/psp/compaction-report", {
       method: "POST",
       headers: {
@@ -685,7 +740,7 @@ type CompactionReportRow = {
               <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">
                 PSP Lodge
               </p>
-              <h1 className="text-xl font-semibold text-[var(--ink)]">
+              <h1 className="psp-title text-xl text-[var(--ink)]">
                 PSP Admin Center
               </h1>
             </div>
@@ -757,20 +812,22 @@ type CompactionReportRow = {
           </CardHeader>
           <CardContent className="space-y-3">
             {selectedLocation ? (
-              <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-3">
+                <div className="psp-card-dark">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">{selectedLocation.name}</p>
+                  <p className="text-sm font-semibold text-[var(--text-inverse)]">
+                    {selectedLocation.name}
+                  </p>
                   <div className="flex gap-2 text-xs">
-                    <Badge className="bg-[color:var(--success)/0.18] text-[var(--success)]">
+                    <Badge className="rounded-full bg-[var(--primary)] px-2 py-0.5 text-[10px] font-semibold text-white">
                       Ready {compactionSummary.ready}
                     </Badge>
-                    <Badge className="bg-[color:var(--warning)/0.2] text-[var(--warnText)]">
+                    <Badge className="rounded-full bg-[var(--neutral)] px-2 py-0.5 text-[10px] font-semibold text-[var(--neutral-foreground)]">
                       Open {compactionSummary.open}
                     </Badge>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-[10px]"
+                      className="h-7 px-2 text-[10px] border-0 bg-[var(--primary)] text-white shadow-[var(--shadow-fab)]"
                       onClick={syncCompactionReports}
                       disabled={!authEmail || syncingReports}
                     >
@@ -778,16 +835,16 @@ type CompactionReportRow = {
                     </Button>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                <p className="mt-1 text-xs text-[var(--text-inverse-muted)]">
                   Records: {records.length}
                 </p>
                 {locationRequirement !== null ? (
-                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                  <p className="mt-1 text-xs text-[var(--text-inverse-muted)]">
                     Minimum ITR required: {locationRequirement}
                   </p>
                 ) : null}
                 {locationRequirement !== null ? (
-                  <div className="mt-2 grid gap-1 text-xs text-[var(--muted-foreground)]">
+                  <div className="mt-2 grid gap-1 text-xs text-[var(--text-inverse-muted)]">
                     <div className="flex items-center justify-between">
                       <span>Reports ready</span>
                       <span>{compactionSummary.ready}</span>
@@ -805,18 +862,14 @@ type CompactionReportRow = {
               </div>
             ) : null}
             {compactionReports.length ? (
-              <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-[320px] space-y-3 overflow-y-auto pr-1">
                 {compactionReports.map((report) => {
                   const range = report.block_key.replace("-", " → ");
                   const isOpen = report.status === "OPEN";
                   return (
                     <div
                       key={report.id}
-                      className={`flex items-center justify-between rounded-[12px] border border-[var(--border)] px-3 py-2 ${
-                        report.status === "READY"
-                          ? "bg-[rgba(22,163,74,0.2)]"
-                          : "bg-[rgba(245,158,11,0.2)]"
-                      }`}
+                      className="flex items-center justify-between rounded-[20px] bg-[var(--surface)] px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                     >
                       <div>
                         <p className="text-xs text-[var(--muted-foreground)]">
@@ -826,13 +879,13 @@ type CompactionReportRow = {
                         <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                           Status:{" "}
                           <span
-                            className={
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
                               report.status === "READY"
-                                ? "text-[var(--success)]"
-                                : "text-[var(--warnText)]"
-                            }
+                                ? "bg-[var(--primary)]"
+                                : "bg-[var(--neutral)]"
+                            }`}
                           >
-                            {report.status}
+                            {report.status === "READY" ? "READY" : "OPEN"}
                           </span>
                         </p>
                         {isOpen && report.pending_chainages?.length ? (
@@ -844,7 +897,7 @@ type CompactionReportRow = {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-9 px-3 text-xs"
+                        className="h-9 px-4 text-xs border-0 bg-[var(--primary)] text-white shadow-[var(--shadow-fab)]"
                         onClick={() => handleSendPdf(report)}
                       >
                         Send PDF

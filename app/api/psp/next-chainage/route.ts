@@ -6,11 +6,8 @@ import {
   resolveLocationId,
 } from "@/lib/psp-logic";
 
- export async function GET(request: NextRequest) {
-   const { user, token } = await getUserFromRequest(request);
-   if (!user || !token) {
-     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-   }
+export async function GET(request: NextRequest) {
+  const { user, token } = await getUserFromRequest(request);
 
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get("locationId");
@@ -18,14 +15,16 @@ import {
   const resolvedLocationId = await resolveLocationId({
     locationId,
     locationName,
-    accessToken: token,
+    accessToken: token ?? undefined,
   });
 
   if (!resolvedLocationId) {
     return NextResponse.json({ error: "Missing location" }, { status: 400 });
   }
 
-   const supabase = getSupabaseServer({ accessToken: token });
+  const supabase = token
+    ? getSupabaseServer({ accessToken: token })
+    : getSupabaseServer({ useServiceRole: true });
    const { data, error } = await supabase
      .from("psp_records")
      .select("chainage")

@@ -1,0 +1,206 @@
+/* ============================================================
+   DESIGN TOKENS — Dark Tech Dashboard (ref: Tesla Diagnostic UI)
+   Extraído de imagen de referencia para uso en Cursor/app web
+   ============================================================ */
+
+:root {
+
+  /* -----------------------------------------------------------
+     COLORES BASE
+  ----------------------------------------------------------- */
+  --color-bg-primary:        #0d0f1a;   /* Fondo general, casi negro azulado */
+  --color-bg-surface:        #13161f;   /* Cards y paneles principales */
+  --color-bg-surface-raised: #1a1e2e;   /* Cards elevadas, hover states */
+  --color-bg-overlay:        #1e2235;   /* Modales, tooltips, dropdowns */
+  --color-border:            #2a2f45;   /* Bordes sutiles entre secciones */
+  --color-border-subtle:     #1e2338;   /* Bordes muy tenues, separadores */
+
+  /* -----------------------------------------------------------
+     COLORES DE ACENTO
+  ----------------------------------------------------------- */
+  --color-accent-blue:       #4a9eff;   /* Acento principal — botones, highlights */
+  --color-accent-blue-glow:  rgba(74, 158, 255, 0.15); /* Glow/halo azul */
+  --color-accent-orange:     #ff6b35;   /* Alertas, warnings, issues */
+  --color-accent-orange-dim: rgba(255, 107, 53, 0.15); /* Fondo de badges warning */
+  --color-accent-cyan:       #00d4ff;   /* Elementos activos, progress indicators */
+  --color-accent-green:      #00e676;   /* Estado "Good", valores OK */
+  --color-accent-green-dim:  rgba(0, 230, 118, 0.12); /* Fondo badge "Good" */
+
+  /* -----------------------------------------------------------
+     TIPOGRAFÍA — COLORES
+  ----------------------------------------------------------- */
+  --color-text-primary:      #ffffff;   /* Títulos grandes, valores prominentes */
+  --color-text-secondary:    #8892b0;   /* Labels, subtítulos, texto de apoyo */
+  --color-text-muted:        #4a5280;   /* Texto deshabilitado, placeholders */
+  --color-text-accent:       #4a9eff;   /* Links, valores activos */
+  --color-text-warning:      #ff6b35;   /* Errores, issues */
+  --color-text-success:      #00e676;   /* Valores positivos */
+
+  /* -----------------------------------------------------------
+     TIPOGRAFÍA — ESCALA
+  ----------------------------------------------------------- */
+  --font-family-display:     'Rajdhani', 'Bebas Neue', sans-serif; /* Títulos grandes tipo DIAGNOSTIC */
+  --font-family-body:        'DM Sans', 'Sora', sans-serif;         /* Texto general de UI */
+  --font-family-mono:        'JetBrains Mono', monospace;           /* Valores numéricos, datos */
+
+  --font-size-hero:          2.8rem;    /* Títulos de sección tipo "DIAGNOSTIC" */
+  --font-size-display:       2rem;      /* Valores grandes: "93%", "7200 rpm" */
+  --font-size-xl:            1.25rem;
+  --font-size-lg:            1rem;
+  --font-size-md:            0.875rem;  /* Texto estándar de UI */
+  --font-size-sm:            0.75rem;   /* Labels, badges */
+  --font-size-xs:            0.625rem;  /* Micro-labels */
+
+  --font-weight-bold:        700;
+  --font-weight-semibold:    600;
+  --font-weight-regular:     400;
+  --letter-spacing-wide:     0.08em;    /* Usado en labels como "CAR ELECTRONICS" */
+  --letter-spacing-hero:     0.15em;    /* Para títulos en mayúsculas */
+
+  /* -----------------------------------------------------------
+     ESPACIADO
+  ----------------------------------------------------------- */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+
+  /* -----------------------------------------------------------
+     BORDES Y RADIOS
+  ----------------------------------------------------------- */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
+  --radius-full: 9999px;  /* Pills, badges redondeados */
+
+  /* -----------------------------------------------------------
+     SOMBRAS Y GLOW
+  ----------------------------------------------------------- */
+  --shadow-card:       0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-elevated:   0 8px 40px rgba(0, 0, 0, 0.6);
+  --glow-blue:         0 0 20px rgba(74, 158, 255, 0.3);
+  --glow-orange:       0 0 16px rgba(255, 107, 53, 0.4);
+  --glow-cyan:         0 0 24px rgba(0, 212, 255, 0.25);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — SIDEBAR NAV
+  ----------------------------------------------------------- */
+  --sidebar-width:          64px;
+  --sidebar-bg:             #0d0f1a;
+  --sidebar-icon-color:     #4a5280;
+  --sidebar-icon-active:    #ffffff;
+  --sidebar-active-bg:      #1a1e2e;
+  --sidebar-active-radius:  var(--radius-md);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — CARDS / PANELS
+  ----------------------------------------------------------- */
+  --card-bg:            var(--color-bg-surface);
+  --card-border:        1px solid var(--color-border);
+  --card-border-radius: var(--radius-lg);
+  --card-padding:       var(--space-6);
+  --card-shadow:        var(--shadow-card);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — BOTONES
+  ----------------------------------------------------------- */
+  /* Botón primario (azul, tipo "AI Analyzes") */
+  --btn-primary-bg:         var(--color-accent-blue);
+  --btn-primary-text:       #ffffff;
+  --btn-primary-radius:     var(--radius-full);
+  --btn-primary-padding:    8px 24px;
+  --btn-primary-glow:       var(--glow-blue);
+
+  /* Botón ghost / outline */
+  --btn-ghost-border:       1px solid var(--color-border);
+  --btn-ghost-text:         var(--color-text-secondary);
+  --btn-ghost-bg-hover:     var(--color-bg-surface-raised);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — BADGES / STATUS PILLS
+  ----------------------------------------------------------- */
+  --badge-warning-bg:       var(--color-accent-orange-dim);
+  --badge-warning-text:     var(--color-accent-orange);
+  --badge-warning-border:   1px solid rgba(255, 107, 53, 0.3);
+
+  --badge-success-bg:       var(--color-accent-green-dim);
+  --badge-success-text:     var(--color-accent-green);
+  --badge-success-border:   1px solid rgba(0, 230, 118, 0.2);
+
+  --badge-info-bg:          var(--color-accent-blue-glow);
+  --badge-info-text:        var(--color-accent-blue);
+
+  --badge-radius:           var(--radius-full);
+  --badge-padding:          4px 12px;
+  --badge-font-size:        var(--font-size-sm);
+  --badge-font-weight:      var(--font-weight-semibold);
+  --badge-letter-spacing:   var(--letter-spacing-wide);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — PROGRESS / METRICS
+  ----------------------------------------------------------- */
+  --metric-value-font:      var(--font-family-mono);
+  --metric-value-size:      var(--font-size-display);
+  --metric-value-color:     var(--color-text-primary);
+  --metric-label-color:     var(--color-text-secondary);
+  --metric-label-size:      var(--font-size-sm);
+  --metric-label-spacing:   var(--letter-spacing-wide);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — SECTION LABELS (estilo "CAR ELECTRONICS")
+  ----------------------------------------------------------- */
+  --section-label-font:     var(--font-family-body);
+  --section-label-size:     var(--font-size-sm);
+  --section-label-weight:   var(--font-weight-semibold);
+  --section-label-color:    var(--color-text-secondary);
+  --section-label-spacing:  var(--letter-spacing-wide);
+  --section-label-transform: uppercase;
+
+  /* -----------------------------------------------------------
+     COMPONENTES — NAVBAR / TOPBAR
+  ----------------------------------------------------------- */
+  --topbar-height:      56px;
+  --topbar-bg:          rgba(13, 15, 26, 0.85);
+  --topbar-blur:        blur(12px);
+  --topbar-border:      1px solid var(--color-border-subtle);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — INPUT / SEARCH
+  ----------------------------------------------------------- */
+  --input-bg:           var(--color-bg-overlay);
+  --input-border:       1px solid var(--color-border);
+  --input-radius:       var(--radius-full);
+  --input-padding:      8px 16px;
+  --input-text-color:   var(--color-text-secondary);
+  --input-placeholder:  var(--color-text-muted);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — ICON INDICATORS (puntos de diagnóstico en 3D)
+  ----------------------------------------------------------- */
+  --indicator-size:         36px;
+  --indicator-bg:           rgba(255, 255, 255, 0.1);
+  --indicator-border:       1px solid rgba(255, 255, 255, 0.2);
+  --indicator-warning-bg:   var(--color-accent-orange-dim);
+  --indicator-warning-glow: var(--glow-orange);
+  --indicator-radius:       var(--radius-full);
+
+  /* -----------------------------------------------------------
+     FONDO — TEXTURA / PATRÓN
+  ----------------------------------------------------------- */
+  /* El fondo usa una grilla de puntos muy sutil */
+  --bg-dot-pattern: radial-gradient(circle, #2a2f45 1px, transparent 1px);
+  --bg-dot-size:    24px 24px;
+
+  /* -----------------------------------------------------------
+     TRANSICIONES
+  ----------------------------------------------------------- */
+  --transition-fast:    150ms ease;
+  --transition-base:    250ms ease;
+  --transition-slow:    400ms ease;
+}

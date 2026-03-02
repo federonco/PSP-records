@@ -14,7 +14,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", minHeight: 26 },
   dataRow: { flexDirection: "row", minHeight: 28 },
   cell: { borderStyle: "solid", borderWidth: 1, padding: 3, flexGrow: 1 },
-  headerCell: { backgroundColor: "#e5e7eb", fontWeight: 700 },
+  headerCell: { backgroundColor: "#1a1e2e", fontWeight: 700 },
 });
 
 export async function POST(request: NextRequest) {

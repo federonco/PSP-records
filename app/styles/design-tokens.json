@@ -1,0 +1,179 @@
+{
+  "_description": "Design tokens extraídos de UI de referencia (Tesla Diagnostic Dashboard). Dark tech aesthetic. Pasarlo a Cursor como contexto de diseño.",
+
+  "colors": {
+    "background": {
+      "primary":      "#0d0f1a",
+      "surface":      "#13161f",
+      "surfaceRaised":"#1a1e2e",
+      "overlay":      "#1e2235"
+    },
+    "border": {
+      "default":      "#2a2f45",
+      "subtle":       "#1e2338"
+    },
+    "accent": {
+      "blue":         "#4a9eff",
+      "blueGlow":     "rgba(74, 158, 255, 0.15)",
+      "orange":       "#ff6b35",
+      "orangeDim":    "rgba(255, 107, 53, 0.15)",
+      "cyan":         "#00d4ff",
+      "green":        "#00e676",
+      "greenDim":     "rgba(0, 230, 118, 0.12)"
+    },
+    "text": {
+      "primary":      "#ffffff",
+      "secondary":    "#8892b0",
+      "muted":        "#4a5280",
+      "accent":       "#4a9eff",
+      "warning":      "#ff6b35",
+      "success":      "#00e676"
+    }
+  },
+
+  "typography": {
+    "fonts": {
+      "display":  "Rajdhani, 'Bebas Neue', sans-serif",
+      "body":     "'DM Sans', Sora, sans-serif",
+      "mono":     "'JetBrains Mono', monospace"
+    },
+    "sizes": {
+      "hero":     "2.8rem",
+      "display":  "2rem",
+      "xl":       "1.25rem",
+      "lg":       "1rem",
+      "md":       "0.875rem",
+      "sm":       "0.75rem",
+      "xs":       "0.625rem"
+    },
+    "weights": {
+      "bold":     700,
+      "semibold": 600,
+      "regular":  400
+    },
+    "letterSpacing": {
+      "wide":     "0.08em",
+      "hero":     "0.15em"
+    }
+  },
+
+  "spacing": {
+    "1":  "4px",
+    "2":  "8px",
+    "3":  "12px",
+    "4":  "16px",
+    "5":  "20px",
+    "6":  "24px",
+    "8":  "32px",
+    "10": "40px",
+    "12": "48px"
+  },
+
+  "borderRadius": {
+    "sm":   "6px",
+    "md":   "10px",
+    "lg":   "16px",
+    "xl":   "24px",
+    "full": "9999px"
+  },
+
+  "shadows": {
+    "card":     "0 4px 24px rgba(0,0,0,0.4)",
+    "elevated": "0 8px 40px rgba(0,0,0,0.6)",
+    "glowBlue": "0 0 20px rgba(74,158,255,0.3)",
+    "glowOrange":"0 0 16px rgba(255,107,53,0.4)",
+    "glowCyan": "0 0 24px rgba(0,212,255,0.25)"
+  },
+
+  "components": {
+    "sidebar": {
+      "width":        "64px",
+      "bg":           "#0d0f1a",
+      "iconColor":    "#4a5280",
+      "iconActive":   "#ffffff",
+      "activeBg":     "#1a1e2e"
+    },
+    "card": {
+      "bg":           "#13161f",
+      "border":       "1px solid #2a2f45",
+      "borderRadius": "16px",
+      "padding":      "24px",
+      "shadow":       "0 4px 24px rgba(0,0,0,0.4)"
+    },
+    "button": {
+      "primary": {
+        "bg":           "#4a9eff",
+        "text":         "#ffffff",
+        "borderRadius": "9999px",
+        "padding":      "8px 24px",
+        "glow":         "0 0 20px rgba(74,158,255,0.3)"
+      },
+      "ghost": {
+        "border":       "1px solid #2a2f45",
+        "text":         "#8892b0",
+        "bgHover":      "#1a1e2e"
+      }
+    },
+    "badge": {
+      "warning": {
+        "bg":     "rgba(255,107,53,0.15)",
+        "text":   "#ff6b35",
+        "border": "1px solid rgba(255,107,53,0.3)"
+      },
+      "success": {
+        "bg":     "rgba(0,230,118,0.12)",
+        "text":   "#00e676",
+        "border": "1px solid rgba(0,230,118,0.2)"
+      },
+      "info": {
+        "bg":   "rgba(74,158,255,0.15)",
+        "text": "#4a9eff"
+      },
+      "shared": {
+        "borderRadius": "9999px",
+        "padding":      "4px 12px",
+        "fontSize":     "0.75rem",
+        "fontWeight":   600,
+        "letterSpacing":"0.08em"
+      }
+    },
+    "input": {
+      "bg":           "#1e2235",
+      "border":       "1px solid #2a2f45",
+      "borderRadius": "9999px",
+      "padding":      "8px 16px",
+      "textColor":    "#8892b0",
+      "placeholder":  "#4a5280"
+    },
+    "topbar": {
+      "height":   "56px",
+      "bg":       "rgba(13,15,26,0.85)",
+      "blur":     "blur(12px)",
+      "border":   "1px solid #1e2338"
+    },
+    "sectionLabel": {
+      "fontFamily":    "'DM Sans', sans-serif",
+      "fontSize":      "0.75rem",
+      "fontWeight":    600,
+      "color":         "#8892b0",
+      "letterSpacing": "0.08em",
+      "textTransform": "uppercase"
+    },
+    "metricValue": {
+      "fontFamily": "'JetBrains Mono', monospace",
+      "fontSize":   "2rem",
+      "color":      "#ffffff"
+    },
+    "dotPatternBg": {
+      "description": "Fondo con grilla de puntos sutil",
+      "backgroundImage": "radial-gradient(circle, #2a2f45 1px, transparent 1px)",
+      "backgroundSize":  "24px 24px"
+    }
+  },
+
+  "transitions": {
+    "fast":   "150ms ease",
+    "base":   "250ms ease",
+    "slow":   "400ms ease"
+  }
+}

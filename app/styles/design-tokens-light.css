@@ -1,0 +1,221 @@
+/* ============================================================
+   DESIGN TOKENS — Clean Mobile UI Kit (Light / Multi-Brand)
+   Extraído de imagen de referencia para uso en Cursor/app web
+   ============================================================ */
+
+:root {
+
+  /* -----------------------------------------------------------
+     COLORES BASE
+  ----------------------------------------------------------- */
+  --color-bg-page:           #e8e8e4;   /* Fondo general — gris arena cálido */
+  --color-bg-surface:        #ffffff;   /* Cards, paneles, modales */
+  --color-bg-surface-alt:    #f5f5f2;   /* Superficies secundarias, inputs */
+  --color-bg-dark:           #2d3830;   /* Cards oscuras (ej: "This Year", Business card) */
+  --color-bg-dark-raised:    #3a4a3e;   /* Variante más clara del dark card */
+  --color-border:            #e2e2de;   /* Bordes entre secciones */
+  --color-border-subtle:     #ebebе8;   /* Separadores muy tenues */
+
+  /* -----------------------------------------------------------
+     COLORES DE ACENTO
+  ----------------------------------------------------------- */
+  --color-accent-primary:    #e8524a;   /* Rojo coral — acento principal, FAB, highlights */
+  --color-accent-primary-dim:rgba(232, 82, 74, 0.12); /* Fondo suave del acento */
+  --color-accent-blue:       #4ab8d4;   /* Azul cyan — badges "+12%", labels info */
+  --color-accent-blue-dim:   rgba(74, 184, 212, 0.15);
+
+  /* -----------------------------------------------------------
+     COLORES DE TEXTO
+  ----------------------------------------------------------- */
+  --color-text-primary:      #1a1a1a;   /* Títulos, valores principales */
+  --color-text-secondary:    #6b7280;   /* Subtítulos, labels, texto de apoyo */
+  --color-text-muted:        #9ca3af;   /* Placeholders, texto deshabilitado */
+  --color-text-inverse:      #ffffff;   /* Texto sobre fondos oscuros */
+  --color-text-inverse-muted:#a0aca6;   /* Texto secundario sobre fondos oscuros */
+  --color-text-accent:       #e8524a;   /* Links, valores activos */
+
+  /* -----------------------------------------------------------
+     TIPOGRAFÍA — FUENTES
+  ----------------------------------------------------------- */
+  --font-family-display:     'Plus Jakarta Sans', 'Outfit', sans-serif; /* Títulos y valores grandes */
+  --font-family-body:        'Inter', 'DM Sans', sans-serif;            /* Texto de UI */
+  --font-family-mono:        'DM Mono', monospace;                      /* Valores numéricos */
+
+  /* -----------------------------------------------------------
+     TIPOGRAFÍA — ESCALA
+  ----------------------------------------------------------- */
+  --font-size-hero:          2.4rem;    /* Valores monetarios grandes: "$288,628" */
+  --font-size-display:       1.75rem;   /* Títulos de sección */
+  --font-size-xl:            1.25rem;
+  --font-size-lg:            1rem;
+  --font-size-md:            0.875rem;  /* Texto estándar */
+  --font-size-sm:            0.75rem;   /* Labels, badges */
+  --font-size-xs:            0.625rem;  /* Micro-labels, fechas */
+
+  --font-weight-bold:        700;
+  --font-weight-semibold:    600;
+  --font-weight-medium:      500;
+  --font-weight-regular:     400;
+
+  --letter-spacing-tight:    -0.02em;   /* Títulos y valores grandes */
+  --letter-spacing-normal:   0em;
+  --letter-spacing-wide:     0.04em;    /* Labels uppercase */
+
+  /* -----------------------------------------------------------
+     ESPACIADO
+  ----------------------------------------------------------- */
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+
+  /* -----------------------------------------------------------
+     BORDES Y RADIOS
+  ----------------------------------------------------------- */
+  --radius-sm:    8px;
+  --radius-md:    12px;
+  --radius-lg:    20px;
+  --radius-xl:    28px;
+  --radius-2xl:   36px;
+  --radius-full:  9999px;
+
+  /* -----------------------------------------------------------
+     SOMBRAS
+  ----------------------------------------------------------- */
+  --shadow-sm:      0 1px 4px rgba(0,0,0,0.06);
+  --shadow-card:    0 2px 16px rgba(0,0,0,0.08);
+  --shadow-elevated:0 8px 32px rgba(0,0,0,0.12);
+  --shadow-fab:     0 4px 20px rgba(232,82,74,0.35);  /* Sombra del FAB coral */
+
+  /* -----------------------------------------------------------
+     COMPONENTES — CARDS
+  ----------------------------------------------------------- */
+  --card-bg:            #ffffff;
+  --card-border-radius: var(--radius-xl);
+  --card-padding:       var(--space-6);
+  --card-shadow:        var(--shadow-card);
+
+  /* Card oscura (dark variant) */
+  --card-dark-bg:           #2d3830;
+  --card-dark-border-radius: var(--radius-xl);
+  --card-dark-text:          #ffffff;
+  --card-dark-text-muted:    #a0aca6;
+
+  /* -----------------------------------------------------------
+     COMPONENTES — BADGES / PILLS
+  ----------------------------------------------------------- */
+  --badge-positive-bg:    #e8524a;
+  --badge-positive-text:  #ffffff;
+  --badge-info-bg:        #4ab8d4;
+  --badge-info-text:      #ffffff;
+  --badge-neutral-bg:     #2d3830;
+  --badge-neutral-text:   #ffffff;
+  --badge-radius:         var(--radius-full);
+  --badge-padding:        3px 10px;
+  --badge-font-size:      0.7rem;
+  --badge-font-weight:    600;
+
+  /* -----------------------------------------------------------
+     COMPONENTES — BOTONES
+  ----------------------------------------------------------- */
+  /* FAB (Floating Action Button) — coral */
+  --fab-bg:           #e8524a;
+  --fab-size:         56px;
+  --fab-shadow:       var(--shadow-fab);
+  --fab-radius:       var(--radius-full);
+  --fab-icon-color:   #ffffff;
+
+  /* Botón primario oscuro (pill) */
+  --btn-primary-bg:       #1a1a1a;
+  --btn-primary-text:     #ffffff;
+  --btn-primary-radius:   var(--radius-full);
+  --btn-primary-padding:  12px 28px;
+
+  /* Botón ghost */
+  --btn-ghost-border:     1px solid var(--color-border);
+  --btn-ghost-text:       var(--color-text-secondary);
+  --btn-ghost-radius:     var(--radius-full);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — BOTTOM NAV BAR
+  ----------------------------------------------------------- */
+  --bottomnav-bg:           #ffffff;
+  --bottomnav-height:       64px;
+  --bottomnav-border-top:   1px solid var(--color-border);
+  --bottomnav-icon-default: #9ca3af;
+  --bottomnav-icon-active:  #1a1a1a;
+  --bottomnav-active-bg:    #1a1a1a;   /* Círculo del ícono activo */
+  --bottomnav-active-icon:  #ffffff;
+  --bottomnav-active-size:  44px;
+  --bottomnav-active-radius:var(--radius-full);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — LIST ITEMS (estilo menú: Messages, Statistics...)
+  ----------------------------------------------------------- */
+  --listitem-bg:              #ffffff;
+  --listitem-border-radius:   var(--radius-lg);
+  --listitem-padding:         var(--space-4) var(--space-5);
+  --listitem-icon-size:       40px;
+  --listitem-icon-bg-default: #f5f5f2;
+  --listitem-icon-bg-active:  #e8524a;
+  --listitem-icon-color:      #6b7280;
+  --listitem-icon-active:     #ffffff;
+  --listitem-text-color:      #1a1a1a;
+  --listitem-text-size:       var(--font-size-lg);
+  --listitem-text-weight:     var(--font-weight-medium);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — CHARTS / GRAFICOS
+  ----------------------------------------------------------- */
+  --chart-line-primary:   #e8524a;   /* Línea principal (Earning) */
+  --chart-line-secondary: #1a1a1a;   /* Línea secundaria (Spending) */
+  --chart-dot-color:      #e8524a;   /* Puntos en lollipop chart */
+  --chart-dot-active:     #e8524a;
+  --chart-bar-color:      #2d3830;   /* Barras del bar chart */
+  --chart-bar-muted:      #d1d5db;   /* Barras inactivas */
+  --chart-grid-color:     #f0f0ed;   /* Líneas de grilla */
+  --chart-label-color:    #9ca3af;
+
+  /* -----------------------------------------------------------
+     COMPONENTES — PROGRESS CIRCLE
+  ----------------------------------------------------------- */
+  --progress-track:       #e2e2de;
+  --progress-fill:        #e8524a;
+  --progress-text-color:  #1a1a1a;
+  --progress-text-size:   var(--font-size-xl);
+  --progress-text-weight: var(--font-weight-bold);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — TOPBAR / HEADER
+  ----------------------------------------------------------- */
+  --topbar-height:        56px;
+  --topbar-bg:            transparent;
+  --topbar-title-size:    var(--font-size-lg);
+  --topbar-title-weight:  var(--font-weight-semibold);
+  --topbar-icon-color:    #1a1a1a;
+  --topbar-icon-bg:       #ffffff;
+  --topbar-icon-size:     36px;
+  --topbar-icon-radius:   var(--radius-full);
+
+  /* -----------------------------------------------------------
+     COMPONENTES — INPUTS
+  ----------------------------------------------------------- */
+  --input-bg:             #f5f5f2;
+  --input-border:         none;
+  --input-border-radius:  var(--radius-md);
+  --input-padding:        12px 16px;
+  --input-text-color:     #1a1a1a;
+  --input-placeholder:    #9ca3af;
+
+  /* -----------------------------------------------------------
+     TRANSICIONES
+  ----------------------------------------------------------- */
+  --transition-fast:    150ms ease;
+  --transition-base:    250ms ease;
+  --transition-slow:    400ms ease;
+}

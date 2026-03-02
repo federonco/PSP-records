@@ -3,10 +3,7 @@ import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
-  const { user, token } = await getUserFromRequest(request);
-  if (!user || !token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const { token } = await getUserFromRequest(request);
 
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get("locationId");
@@ -14,7 +11,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
   }
 
-  const supabase = getSupabaseServer({ accessToken: token });
+  const supabase = token
+    ? getSupabaseServer({ accessToken: token })
+    : getSupabaseServer({ useServiceRole: true });
   const { data, error } = await supabase
     .from("psp_sections")
     .select("id,name")

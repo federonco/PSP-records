@@ -87,6 +87,15 @@ import {
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
 
+  const getAccessToken = async () => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) {
+      return data.session.access_token;
+    }
+    const refreshed = await supabase.auth.refreshSession();
+    return refreshed.data.session?.access_token ?? null;
+  };
+
    const selectedLocation = useMemo(
      () => locations.find((loc) => loc.id === locationId),
      [locationId, locations],
@@ -161,8 +170,7 @@ import {
    useEffect(() => {
      if (!authEmail || !locationId) return;
      const loadSections = async () => {
-       const session = await supabase.auth.getSession();
-       const token = session.data.session?.access_token;
+      const token = await getAccessToken();
        const response = await fetch(
          `/api/psp/sections?locationId=${locationId}`,
          {
@@ -188,11 +196,10 @@ import {
      loadSections();
    }, [authEmail, locationId, pushToast, supabase]);
 
-   useEffect(() => {
-     if (!locationId || !authEmail) return;
+  useEffect(() => {
+    if (!locationId) return;
      const updateSuggestion = async () => {
-       const session = await supabase.auth.getSession();
-       const token = session.data.session?.access_token;
+      const token = await getAccessToken();
     const response = await fetch(
       `/api/psp/next-chainage?locationId=${locationId}`,
       {
@@ -210,16 +217,23 @@ import {
        }
        setChainage(payload.chainage);
      };
-     updateSuggestion();
-  }, [authEmail, locationId, pushToast, supabase]);
+    updateSuggestion();
+  }, [locationId, pushToast, supabase]);
 
   useEffect(() => {
      if (!locationId || !chainage || !authEmail) return;
      const checkDuplicate = async () => {
       setChecking(true);
       try {
-        const session = await supabase.auth.getSession();
-        const token = session.data.session?.access_token;
+        const token = await getAccessToken();
+        if (!token) {
+          pushToast({
+            type: "error",
+            title: "Sign in required",
+            message: "Authenticate before checking duplicates.",
+          });
+          return;
+        }
         const response = await fetch(
           `/api/psp/exists?locationId=${locationId}&chainage=${chainage}`,
           {
@@ -254,11 +268,11 @@ import {
      setLayers((prev) => ({ ...prev, [key]: value }));
    };
 
-   const layerOutOfRange = (value: string) => {
-     if (value === "") return false;
-     const num = Number(value);
-     return Number.isNaN(num) || num < 0 || num > 30;
-   };
+  const layerOutOfRange = (value: string) => {
+    if (value === "") return false;
+    const num = Number(value);
+    return Number.isNaN(num) || num < 0 || num > 35;
+  };
 
    const canSubmit =
      locationId &&
@@ -267,7 +281,7 @@ import {
      layerFields.every((field) => {
        const value = layers[field.key];
        const num = Number(value);
-       return value !== "" && !Number.isNaN(num) && num >= 0 && num <= 30;
+      return value !== "" && !Number.isNaN(num) && num >= 0 && num <= 35;
      });
 
   const handleAdjustChainage = (step: number) => {
@@ -290,8 +304,16 @@ import {
    const handleLodge = async () => {
      if (!canSubmit || duplicate) return;
      setLoading(true);
-     const session = await supabase.auth.getSession();
-     const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before lodging records.",
+      });
+      setLoading(false);
+      return;
+    }
      const response = await fetch("/api/psp/records", {
        method: "POST",
        headers: {
@@ -327,10 +349,11 @@ import {
      pushToast({ type: "success", title: "Record lodged" });
      setDuplicate(false);
      setRecordId(null);
+    const nextToken = await getAccessToken();
     const nextResponse = await fetch(
       `/api/psp/next-chainage?locationId=${locationId}`,
       {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: nextToken ? { Authorization: `Bearer ${nextToken}` } : undefined,
       },
     );
      const nextPayload = await nextResponse.json();
@@ -342,8 +365,16 @@ import {
    const handleOverwrite = async () => {
      if (!canSubmit || !duplicate) return;
      setLoading(true);
-     const session = await supabase.auth.getSession();
-     const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before overwriting records.",
+      });
+      setLoading(false);
+      return;
+    }
      const response = await fetch("/api/psp/records/overwrite", {
        method: "POST",
        headers: {
@@ -382,8 +413,15 @@ import {
        });
        return;
      }
-     const session = await supabase.auth.getSession();
-     const token = session.data.session?.access_token;
+    const token = await getAccessToken();
+    if (!token) {
+      pushToast({
+        type: "error",
+        title: "Sign in required",
+        message: "Authenticate before saving signatures.",
+      });
+      return;
+    }
      const response = await fetch("/api/psp/signature", {
        method: "POST",
        headers: {
@@ -422,7 +460,7 @@ import {
               <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">
                 PSP Record Sheet
               </p>
-              <h1 className="text-xl font-semibold text-[var(--ink)]">
+              <h1 className="psp-title text-xl text-[var(--ink)]">
                 PSP Record Sheet
               </h1>
             </div>
@@ -449,7 +487,7 @@ import {
 
         <Card className="psp-card h-[90px] gap-3 py-3">
           <CardHeader className="pb-0">
-            <CardTitle className="text-sm">Section</CardTitle>
+            <CardTitle className="text-sm">Location</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-1 items-center pt-0 -mt-[9px]">
             <Select
@@ -471,9 +509,9 @@ import {
           </CardContent>
         </Card>
 
-        <Card className="psp-card h-[180px] rounded-[24px] bg-[color:var(--primary)] text-white">
+        <Card className="psp-card-dark h-[180px]">
           <CardHeader className="pb-0">
-            <CardTitle className="text-[16px] uppercase tracking-[0.3em] text-white/80">
+            <CardTitle className="text-[16px] font-semibold text-[var(--text-inverse-muted)]">
               Current Chainage (m)
             </CardTitle>
           </CardHeader>
@@ -482,7 +520,7 @@ import {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-[84px] w-[84px] rounded-full border-white/30 bg-black text-white hover:bg-black/80"
+                className="h-[84px] w-[84px] rounded-full border-0 bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]"
                 onClick={() =>
                   handleAdjustChainage(-CHAINAGE_STEP)
                 }
@@ -495,12 +533,12 @@ import {
                 value={chainageDisplay}
                 onChange={(event) => handleChainageChange(event.target.value)}
                 onBlur={handleChainageBlur}
-                className="h-14 w-full max-w-[224px] border-white/20 bg-white/10 text-center text-3xl font-semibold text-white"
+                className="psp-mono psp-hero h-14 w-full max-w-[224px] bg-[var(--surface-alt)] text-center text-[var(--ink)]"
               />
               <Button
                 variant="outline"
                 size="icon"
-                className="h-[84px] w-[84px] rounded-full border-white/30 bg-black text-white hover:bg-black/80"
+                className="h-[84px] w-[84px] rounded-full border-0 bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]"
                 onClick={() =>
                   handleAdjustChainage(CHAINAGE_STEP)
                 }
@@ -510,11 +548,11 @@ import {
             </div>
             {checking ? (
               <div className="w-full max-w-[260px] space-y-1">
-                <div className="text-center text-xs text-white/70">
+                <div className="text-center text-xs text-[var(--text-inverse-muted)]">
                   Checking...
                 </div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-white/20">
-                  <div className="h-full w-1/2 animate-pulse rounded-full bg-white/70" />
+                <div className="h-1 w-full overflow-hidden rounded-full bg-[color:var(--text-inverse)/0.2]">
+                  <div className="h-full w-1/2 animate-pulse rounded-full bg-[var(--text-inverse)]" />
                 </div>
               </div>
             ) : null}
@@ -542,7 +580,7 @@ import {
               {[0, 1, 2].map((layerIndex) => (
                 <div
                   key={`layer-${layerIndex}`}
-                  className="rounded-[14px] border border-[var(--border)] bg-[var(--surface-2)] p-3"
+                  className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 >
                       <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[var(--muted-foreground)]">
                     <span>Layer {layerIndex + 1}</span>
@@ -559,13 +597,18 @@ import {
                             <Input
                               type="number"
                               min={0}
-                              max={30}
+                              max={35}
                               value={value}
                               onChange={(event) =>
                                 updateLayerValue(field.key, event.target.value)
                               }
                               className={`psp-input ${warning ? "border-[var(--danger)] bg-[color:var(--danger)/0.08]" : ""}`}
                             />
+                            {warning ? (
+                              <p className="text-xs text-[var(--danger)]">
+                                Out of Tolerance
+                              </p>
+                            ) : null}
                           </div>
                         );
                       },

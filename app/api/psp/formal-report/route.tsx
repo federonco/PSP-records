@@ -12,7 +12,7 @@ const styles = StyleSheet.create({
   table: { display: "flex", width: "auto", borderStyle: "solid", borderWidth: 1 },
   row: { flexDirection: "row" },
   cell: { borderStyle: "solid", borderWidth: 1, padding: 4, flexGrow: 1 },
-  headerCell: { backgroundColor: "#e5e7eb", fontWeight: 700 },
+  headerCell: { backgroundColor: "#1a1e2e", fontWeight: 700 },
 });
 
 export async function POST(request: NextRequest) {
