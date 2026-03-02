@@ -221,7 +221,7 @@ export async function POST(request: NextRequest) {
     </Document>
   );
 
-  const buffer = (await pdf(doc).toBuffer()) as Buffer;
+  const buffer = (await pdf(doc).toBuffer()) as unknown as Buffer;
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = process.env.SMTP_PORT;
   const smtpUser = process.env.SMTP_USER;
