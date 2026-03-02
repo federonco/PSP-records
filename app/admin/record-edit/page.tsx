@@ -1,6 +1,6 @@
 "use client";
 
- import { useEffect, useMemo, useState } from "react";
+ import { Suspense, useEffect, useMemo, useState } from "react";
  import Link from "next/link";
  import { useSearchParams } from "next/navigation";
  import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -49,7 +49,7 @@
    signature_strokes?: SignatureStrokes | null;
  } & Record<LayerKey, number>;
 
- export default function RecordEditPage() {
+function RecordEditContent() {
    const supabase = getSupabaseBrowser();
    const { pushToast } = useToast();
    const searchParams = useSearchParams();
@@ -188,6 +188,40 @@
      pushToast({ type: "success", title: "Signature captured" });
    };
 
+  const handleDelete = async () => {
+    if (!record) return;
+    const confirmed = window.confirm(
+      `Delete record at Ch ${record.chainage}? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    setLoading(true);
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token;
+    const response = await fetch("/api/psp/records/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        locationId: record.location_id,
+        chainage: record.chainage,
+      }),
+    });
+    const payload = await response.json();
+    setLoading(false);
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Delete failed",
+        message: payload.error ?? "Unable to delete record.",
+      });
+      return;
+    }
+    pushToast({ type: "success", title: "Record deleted" });
+    window.location.href = "/admin";
+  };
+
    const summaryTitle = useMemo(() => {
      if (!record) return "Edit Record";
      return `${record.location_name ?? record.location_id} · Ch ${record.chainage}`;
@@ -319,13 +353,23 @@
 
          <Card className="psp-card">
            <CardContent className="pt-0 text-[#16a34a]">
-             <Button
-               className="psp-button psp-button-primary w-full"
-               onClick={handleSave}
-               disabled={!canSubmit || loading}
-             >
-               {loading ? "Saving..." : "Save Record"}
-             </Button>
+            <div className="flex flex-col gap-2">
+              <Button
+                className="psp-button psp-button-primary w-full"
+                onClick={handleSave}
+                disabled={!canSubmit || loading}
+              >
+                {loading ? "Saving..." : "Save Record"}
+              </Button>
+              <Button
+                variant="destructive"
+                className="w-full"
+                onClick={handleDelete}
+                disabled={loading || !record}
+              >
+                Delete Record
+              </Button>
+            </div>
            </CardContent>
          </Card>
        </div>
@@ -344,3 +388,11 @@
      </div>
    );
  }
+
+export default function RecordEditPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <RecordEditContent />
+    </Suspense>
+  );
+}

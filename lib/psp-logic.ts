@@ -76,11 +76,7 @@ export function validateSaveData(input: Record<string, unknown>) {
   const chainageNumber = Number(chainageRaw);
   if (!Number.isFinite(chainageNumber)) {
     errors.push(
-      `Invalid chainage: received '${chainageRaw}', parsed NaN. Must be multiple of ${CHAINAGE_STEP}.`,
-    );
-  } else if (chainageNumber % CHAINAGE_STEP !== 0) {
-    errors.push(
-      `Invalid chainage: received '${chainageRaw}', parsed ${chainageNumber}. Must be multiple of ${CHAINAGE_STEP}.`,
+      `Invalid chainage: received '${chainageRaw}', parsed NaN.`,
     );
   }
   clean.chainage = Number.isFinite(chainageNumber) ? chainageNumber : 0;
@@ -107,18 +103,26 @@ export function validateSaveData(input: Record<string, unknown>) {
   return { ok: true as const, clean };
 }
 
-export function getNextChainageFromSet(chainages: number[]) {
-  if (!chainages.length) return START_CHAINAGE;
-
+export function getNextChainageFromSet(
+  chainages: number[],
+  direction: "backwards" | "onwards" = "backwards",
+  startChainage?: number | null,
+) {
   const numeric = chainages.filter((value) => Number.isFinite(value));
-  if (!numeric.length) return START_CHAINAGE;
-
-  const max = Math.max(...numeric);
-  const aligned = Math.floor(max / CHAINAGE_STEP) * CHAINAGE_STEP;
+  const base =
+    typeof startChainage === "number"
+      ? startChainage
+      : numeric.length
+        ? Math.floor(Math.max(...numeric) / CHAINAGE_STEP) * CHAINAGE_STEP
+        : START_CHAINAGE;
   const set = new Set(numeric);
-  let nextCh = aligned - CHAINAGE_STEP;
-  while (set.has(nextCh) || nextCh % CHAINAGE_STEP !== 0) {
-    nextCh -= CHAINAGE_STEP;
+  const step = direction === "onwards" ? CHAINAGE_STEP : -CHAINAGE_STEP;
+  let nextCh = base;
+  if (set.has(nextCh)) {
+    nextCh += step;
+  }
+  while (set.has(nextCh)) {
+    nextCh += step;
   }
   return nextCh;
 }

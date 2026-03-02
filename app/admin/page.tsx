@@ -438,10 +438,9 @@ type CompactionReportRow = {
     }
     pushToast({
       type: "success",
-      title: "Audit report ready",
-      message: "Download link generated.",
+      title: "Audit report sent",
+      message: "The PDF was emailed to the admin list.",
     });
-    window.open(payload.url, "_blank");
   };
 
   const locationSummaries = useMemo(() => {
@@ -1171,6 +1170,13 @@ type CompactionReportRow = {
             </p>
           )}
           <DialogFooter>
+            <Button
+              className="psp-button psp-button-primary h-9 px-3 text-xs"
+              onClick={handleAuditReportAll}
+              disabled={!selectedLocation || loading}
+            >
+              Send PDF
+            </Button>
             <Button variant="outline" onClick={() => setAuditOpen(false)}>
               Close
             </Button>

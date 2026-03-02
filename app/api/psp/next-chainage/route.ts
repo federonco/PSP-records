@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
-   const { data, error } = await supabase
+  const { data, error } = await supabase
      .from("psp_records")
      .select("chainage")
     .eq("location_id", resolvedLocationId)
@@ -36,7 +36,23 @@ export async function GET(request: NextRequest) {
      return NextResponse.json({ error: error.message }, { status: 500 });
    }
 
+  const { data: locationRow } = await supabase
+    .from("psp_locations")
+    .select("direction,start_chainage")
+    .eq("id", resolvedLocationId)
+    .maybeSingle();
+
+  const direction =
+    locationRow?.direction === "onwards" ? "onwards" : "backwards";
+  const startChainage =
+    typeof locationRow?.start_chainage === "number"
+      ? locationRow.start_chainage
+      : null;
   const chainageList = (data ?? []).map((row) => Number(row.chainage));
-  const chainage = getNextChainageFromSet(chainageList);
+  const chainage = getNextChainageFromSet(
+    chainageList,
+    direction,
+    startChainage,
+  );
    return NextResponse.json({ chainage });
  }
