@@ -1,36 +1,76 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# PSP Lodge (Next.js + Supabase)
 
-## Getting Started
+## Setup
 
-First, run the development server:
+1. Create a Supabase project.
+2. Run `supabase/schema.sql` in the SQL editor.
+3. Create a storage bucket named `psp-reports` (or update `SUPABASE_STORAGE_BUCKET`).
+4. Copy `.env.example` to `.env.local` and fill in values, including
+   `SUPABASE_SERVICE_ROLE_KEY` for admin sign-off and PDF uploads.
+5. Install dependencies and run the dev server:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Admin access
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Admins are checked in two places:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **App allowlist**: add comma-separated emails to `ADMIN_EMAIL_ALLOWLIST`.
+- **DB policy**: insert users into `psp_admins`:
 
-## Learn More
+```sql
+insert into psp_admins (user_id, email)
+values ('<auth.user.id>', '<email>');
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Block computation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Blocks are calculated from the maximum chainage at a location:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- A block expects 10 chainages: `max, max-20, ... max-180`.
+- The next block starts at `max-200`, then continues downward.
+- `READY` = all 10 chainages present, otherwise `OPEN`.
 
-## Deploy on Vercel
+## Sign-off rules
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Index page uses `/api/psp/signoff-record`.
+- Admin page uses `/api/psp/signoff-block`.
+- Sign-off requires an admin allowlist match and `psp_admins` membership.
+- Force overwrite is required to replace an existing sign-off.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Sections + signatures
+
+- Sections are stored in `psp_sections` and linked via `psp_records.section_id`.
+- Inspector signatures are saved as JSON stroke data in `psp_records.signature_strokes`.
+- Signature updates use the server-side service role and never expose secrets to the client.
+
+## Audit report generation
+
+- Admin page calls `/api/psp/audit-report`.
+- The handler renders a simple table-based PDF.
+- PDF is uploaded to Supabase Storage under `audit-reports/`.
+- A `psp_reports` row is inserted with the file path and metadata.
+
+## Compaction report template (DOCX)
+
+- Place the template at `templates/ITR-EXB-003.docx`.
+- POST to `/api/psp/compaction-report` with:
+
+```json
+{
+  "format": "pdf",
+  "data": {
+    "REPORT_DATE": "01/03/2026",
+    "SUPERVISOR_NAME": "Adam O'Neil",
+    "WORK_LOCATION": "McLennan Dr - SEC3",
+    "records": [
+      { "date": "01/03/2026", "ch": 3210, "l1_a": 1, "l1_b": 2, "l1_c": 3, "l2_a": 1, "l2_b": 2, "l2_c": 3, "l3_a": 1, "l3_b": 2, "l3_c": 3 }
+    ]
+  }
+}
+```
+
+- If PDF conversion fails (no LibreOffice), the API returns a DOCX file.

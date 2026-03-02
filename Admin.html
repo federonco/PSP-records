@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    :root{
+      --bg: #F5F7F8;
+      --surface: #FFFFFF;
+      --ink: #2C4F66;
+      --text: #0F172A;
+      --muted: #64748B;
+      --border: #E2E8F0;
+
+      --primary: #1E90FF;
+      --primary2: #0B5ED7;
+
+      --success: #16A34A;
+      --warning: #FBBF24;
+      --danger: #FF4D4D;
+
+      --disabled: #CBD5E1;
+      --focus: #93C5FD;
+
+      --warnBg: #FFF7ED;
+      --warnText: #9A3412;
+
+      --okBg: #EFF6FF;
+      --okBorder: #BFDBFE;
+      --okText: #1E3A8A;
+    }
+
+    .watermark{
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0.04;
+      z-index: -1;
+      width: 80%;
+      max-width: 420px;
+      pointer-events: none;
+      user-select: none;
+    }
+  </style>
+</head>
+
+<body class="bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[var(--primary)]/20 overflow-x-hidden">
+  <img src="https://raw.githubusercontent.com/federonco/readx-assets/main/readX%20brown.png" class="watermark" alt="readX">
+
+  <div id="app" class="max-w-md mx-auto h-screen flex flex-col relative">
+
+    <header class="bg-[var(--ink)] px-6 py-3 text-center border-b-4 border-[var(--primary)] sticky top-0 z-20 shadow-md rounded-b-[2.5rem]">
+      <h1 class="text-white font-black text-xl italic uppercase tracking-tighter flex items-center justify-center gap-2">
+        <div class="w-2 h-6 bg-[var(--primary)] skew-x-[-15deg]"></div>
+        Admin Panel
+      </h1>
+      <p class="text-[var(--muted)] text-[10px] uppercase font-bold mt-1 tracking-[0.2em]">Dispatch Center</p>
+    </header>
+
+    <div class="p-3 space-y-2 flex-1 overflow-y-auto">
+
+      <div id="toast" class="hidden fixed top-4 left-4 right-4 z-50 p-4 rounded-xl text-center text-xs font-bold shadow-lg animate-in slide-in-from-top-2 duration-200"></div>
+
+      <!-- LOGIN -->
+      <div id="login-screen" class="space-y-2">
+        <div class="bg-[var(--surface)] p-4 rounded-2xl shadow-sm border border-[var(--border)]">
+          <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Username</label>
+          <input id="user" type="text"
+            class="w-full p-3 bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl font-bold text-[var(--text)] outline-none focus:border-[var(--focus)] transition-colors"
+            placeholder="Username" />
+        </div>
+
+        <div class="bg-[var(--surface)] p-4 rounded-2xl shadow-sm border border-[var(--border)]">
+          <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Password</label>
+          <input id="pass" type="password"
+            class="w-full p-3 bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl font-bold text-[var(--text)] outline-none focus:border-[var(--focus)] transition-colors"
+            placeholder="Password" />
+        </div>
+
+        <button id="login-btn" onclick="handleLogin()"
+          class="w-full py-5 rounded-2xl text-white font-black uppercase tracking-[0.2em] shadow-xl transition-all active:scale-[0.99] flex items-center justify-center gap-3"
+          style="background-color: var(--primary);">
+          Login
+        </button>
+      </div>
+
+      <!-- PANEL -->
+      <div id="admin-panel" class="hidden space-y-2">
+
+        <div class="bg-[var(--surface)] p-3 rounded-2xl shadow-sm border border-[var(--border)] flex items-center justify-between">
+          <div>
+            <div class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest">Logged in as</div>
+            <div id="whoami" class="font-black text-sm" style="color: var(--text);">—</div>
+          </div>
+          <button onclick="location.reload()"
+            class="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border"
+            style="border-color: var(--border); color: var(--danger); background: var(--surface);">
+            Logout
+          </button>
+        </div>
+
+        <div class="bg-[var(--surface)] p-3 rounded-2xl shadow-sm border border-[var(--border)]">
+          <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Work Location</label>
+          <select id="admin-loc" onchange="loadBlocks()"
+            class="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg font-bold text-sm text-[var(--text)] outline-none appearance-none cursor-pointer focus:border-[var(--focus)] transition-colors leading-tight">
+            <option value="McLennan Dr - SEC3">McLennan Dr - SEC3</option>
+          </select>
+        </div>
+
+        <div class="bg-[var(--surface)] p-3 rounded-2xl shadow-sm border border-[var(--border)] flex items-center justify-between">
+          <div>
+            <div class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest">Section Edit</div>
+            <div class="text-[11px] font-bold" style="color: var(--text);">Create a new section</div>
+          </div>
+          <button id="create-section-btn" onclick="openSectionModal()"
+            class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border"
+            style="border-color: var(--border); color: var(--text); background: var(--surface);">
+            Create Section
+          </button>
+        </div>
+
+        <div id="blocks-container" class="space-y-3"></div>
+      </div>
+
+      <footer class="text-center py-2 text-[10px] font-normal tracking-[0.1em] select-none"
+        style="color: var(--muted); line-height: 1.35;">
+        <div class="flex items-center justify-center gap-2">
+          <span>Created by</span>
+          <img
+            src="https://raw.githubusercontent.com/federonco/readx-assets/main/readX%20brown.png"
+            alt="readX logo"
+            style="height:12px; vertical-align:middle;"
+          />
+          <sup style="font-size:8px; position:relative; top:-2px;">™</sup>
+        </div>
+        <div style="opacity:0.85;">
+          for APA (Quality Management Systems) — All rights reserved • Admin
+        </div>
+      </footer>
+
+    </div>
+
+    <!-- SECTION MODAL -->
+    <div id="section-modal" class="hidden fixed inset-0 z-50 items-center justify-center">
+      <div class="absolute inset-0 bg-black/40"></div>
+      <div class="relative w-[92%] max-w-md bg-[var(--surface)] p-4 rounded-2xl shadow-xl border border-[var(--border)]">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-[11px] font-black uppercase tracking-widest" style="color: var(--muted);">Create Section</div>
+          <button onclick="closeSectionModal()"
+            class="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-xl border"
+            style="border-color: var(--border); color: var(--danger); background: var(--surface);">
+            Close
+          </button>
+        </div>
+
+        <div class="space-y-3">
+          <div class="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+            <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Section Length (m)</label>
+            <input id="sec-length" type="number" inputmode="numeric"
+              class="w-full p-3 bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl font-bold text-[var(--text)] outline-none focus:border-[var(--focus)] transition-colors"
+              placeholder="e.g. 200" />
+          </div>
+
+          <div class="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+            <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Starting Chainage (optional)</label>
+            <input id="sec-start" type="number" inputmode="numeric"
+              class="w-full p-3 bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl font-bold text-[var(--text)] outline-none focus:border-[var(--focus)] transition-colors"
+              placeholder="auto from last chainage" />
+          </div>
+
+          <div class="bg-[var(--surface)] p-3 rounded-xl border border-[var(--border)]">
+            <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Direction</label>
+            <select id="sec-direction"
+              class="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg font-bold text-sm text-[var(--text)] outline-none appearance-none cursor-pointer focus:border-[var(--focus)] transition-colors leading-tight">
+              <option value="backwards">Backwards</option>
+              <option value="onwards">Onwards</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="mt-4 flex items-center justify-end gap-2">
+          <button onclick="closeSectionModal()"
+            class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border"
+            style="border-color: var(--border); color: var(--text); background: var(--surface);">
+            Cancel
+          </button>
+          <button id="sec-create-btn" onclick="handleCreateSection()"
+            class="text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl border"
+            style="border-color: var(--primary); color: white; background: var(--primary);">
+            Create
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let sessionUser = null;
+
+    const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+
+      const bg =
+        type === 'success' ? cssVar('--success') :
+        type === 'error'   ? cssVar('--danger')  :
+                             cssVar('--primary');
+
+      t.style.backgroundColor = bg;
+      t.style.color = 'white';
+      t.className = 'fixed top-4 left-4 right-4 z-50 p-4 rounded-xl text-center text-xs font-bold shadow-lg animate-in slide-in-from-top-2 duration-200 block';
+      setTimeout(() => t.classList.add('hidden'), 4500);
+    }
+
+    function handleLogin() {
+      const u = document.getElementById('user').value;
+      const p = document.getElementById('pass').value;
+
+      const btn = document.getElementById('login-btn');
+      btn.disabled = true;
+      btn.style.backgroundColor = cssVar('--primary2');
+      btn.innerText = 'Checking...';
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.style.backgroundColor = cssVar('--primary');
+          btn.innerText = 'Login';
+
+          if (res && res.success) {
+            sessionUser = res;
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('admin-panel').classList.remove('hidden');
+            document.getElementById('whoami').innerText = res.user || 'admin';
+            showToast('Login success', 'success');
+            loadBlocks();
+          } else {
+            showToast(res && res.error ? res.error : 'Invalid credentials', 'error');
+          }
+        })
+        .withFailureHandler(err => {
+          const txt = (err && err.message) ? err.message : String(err);
+          btn.disabled = false;
+          btn.style.backgroundColor = cssVar('--primary');
+          btn.innerText = 'Login';
+          showToast('Backend error: ' + txt, 'error');
+        })
+        .loginUser(u, p);
+    }
+
+    function badge(status){
+      const base = 'text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg border';
+      if (status === 'READY') {
+        return `<span class="${base}" style="background: color-mix(in srgb, var(--success) 12%, white); border-color: var(--success); color: var(--success);">Ready</span>`;
+      }
+      return `<span class="${base}" style="background: color-mix(in srgb, var(--warning) 18%, white); border-color: var(--warning); color: var(--warnText);">Open</span>`;
+    }
+
+    function fmtPending(missingArr){
+      if (!missingArr || !missingArr.length) return 'No pending CH calculated yet';
+      const max = 14;
+      const shown = missingArr.slice(0, max).join(', ');
+      return missingArr.length > max ? `${shown} ... (+${missingArr.length - max})` : shown;
+    }
+
+    function loadBlocks() {
+      const loc = document.getElementById('admin-loc').value;
+      const container = document.getElementById('blocks-container');
+      container.innerHTML = '<p class="text-center text-xs font-bold" style="color: var(--muted);">Loading blocks...</p>';
+
+      google.script.run
+        .withSuccessHandler(blocks => {
+          if (!blocks || !blocks.length) {
+            container.innerHTML = '<p class="text-center text-xs font-bold" style="color: var(--muted);">No blocks found</p>';
+            return;
+          }
+
+          container.innerHTML = blocks.map(b => {
+            const isReady = b.status === 'READY';
+
+            // ✅ both READY and OPEN are clickable now
+            const btnBg = isReady ? cssVar('--ink') : cssVar('--warning');
+            const btnColor = isReady ? 'white' : 'black';
+            const btnText = isReady ? 'Dispatch' : 'Dispatch (Open)';
+
+            return `
+              <div class="bg-[var(--surface)] p-4 rounded-2xl shadow-sm border border-[var(--border)]">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2">
+                      <div class="text-[10px] font-black uppercase tracking-widest" style="color: var(--muted);">
+                        Report #${b.reportNum}
+                      </div>
+                      ${badge(b.status)}
+                    </div>
+
+                    <div class="font-black text-sm italic mt-1" style="color: var(--text);">
+                      ${b.blockStart !== "" ? `${b.blockStart} → ${b.blockEnd}` : 'No CH in this block yet'}
+                    </div>
+
+                    <div class="text-[10px] font-bold mt-1" style="color: var(--primary);">
+                      Records: ${b.recordCount || 0} • Pages: ${b.pages || 1}
+                    </div>
+
+                    <div class="text-[10px] font-bold mt-1" style="color: var(--muted);">
+                      ${isReady
+                        ? 'Coverage OK (10 results @ 20m = 200m)'
+                        : `Pending CH: ${fmtPending(b.missing)}`
+                      }
+                    </div>
+                  </div>
+
+                  <div class="flex flex-col gap-2">
+                    <button
+                      onclick="sendReport(${b.reportNum}, '${b.status}', this)"
+                      class="text-[10px] font-black px-4 py-2 rounded-xl uppercase transition-all active:scale-95"
+                      style="background-color:${btnBg}; color:${btnColor};">
+                      ${btnText}
+                    </button>
+                    <button
+                      onclick="sendAudit(${b.reportNum}, '${b.status}', this)"
+                      class="text-[10px] font-black px-4 py-2 rounded-xl uppercase transition-all active:scale-95"
+                      style="background-color:${cssVar('--primary')}; color:white;">
+                      Audit Report
+                    </button>
+                    <button
+                      onclick="signOff(${b.reportNum}, this)"
+                      class="text-[10px] font-black px-4 py-2 rounded-xl uppercase transition-all active:scale-95"
+                      style="background-color:${cssVar('--success')}; color:white;">
+                      Sign Off
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('');
+        })
+        .withFailureHandler(err => {
+          const txt = (err && err.message) ? err.message : String(err);
+          container.innerHTML = '';
+          showToast('Backend error: ' + txt, 'error');
+        })
+        .getHistoricalBlocks(loc);
+    }
+
+    function sendReport(blockNum, status, btn) {
+      const loc = document.getElementById('admin-loc').value;
+
+      // ✅ confirm for OPEN dispatch
+      let forceSend = false;
+      if (String(status).toUpperCase() === 'OPEN') {
+        forceSend = confirm(
+          "This report is still OPEN (block not complete).\n\n" +
+          "Do you want to dispatch it anyway?"
+        );
+        if (!forceSend) {
+          showToast('Dispatch cancelled', 'error');
+          return;
+        }
+      }
+
+      const oldText = btn.innerText;
+      const oldBg = btn.style.backgroundColor;
+      const oldColor = btn.style.color;
+
+      btn.innerText = 'Sending...';
+      btn.disabled = true;
+      btn.style.backgroundColor = cssVar('--primary2');
+      btn.style.color = 'white';
+
+      const t = setTimeout(() => {
+        showToast('Timeout: no response from server', 'error');
+        btn.innerText = oldText;
+        btn.disabled = false;
+        btn.style.backgroundColor = oldBg;
+        btn.style.color = oldColor;
+      }, 45000);
+
+      google.script.run
+        .withSuccessHandler(msg => {
+          clearTimeout(t);
+
+          const txt = String(msg || '');
+          const upper = txt.toUpperCase();
+          const isBad = upper.includes('ERROR');
+
+          showToast(txt || 'Done', isBad ? 'error' : 'success');
+
+          btn.innerText = oldText;
+          btn.disabled = false;
+          btn.style.backgroundColor = oldBg;
+          btn.style.color = oldColor;
+        })
+        .withFailureHandler(err => {
+          clearTimeout(t);
+
+          let txt = '';
+          if (err && err.message) txt = err.message;
+          else {
+            try { txt = JSON.stringify(err); } catch (e) { txt = String(err); }
+          }
+
+          showToast('Backend error: ' + (txt || 'Unknown'), 'error');
+
+          btn.innerText = oldText;
+          btn.disabled = false;
+          btn.style.backgroundColor = oldBg;
+          btn.style.color = oldColor;
+        })
+        .sendAdminReport(loc, blockNum, sessionUser.email, forceSend);
+    }
+
+    function sendAudit(blockNum, status, btn) {
+      const loc = document.getElementById('admin-loc').value;
+
+      let includeOpen = true;
+      if (String(status).toUpperCase() === 'OPEN') {
+        includeOpen = confirm(
+          "This block is OPEN (not complete).\n\n" +
+          "Generate Audit Report anyway?"
+        );
+        if (!includeOpen) {
+          showToast('Audit report cancelled', 'error');
+          return;
+        }
+      }
+
+      const oldText = btn.innerText;
+      const oldBg = btn.style.backgroundColor;
+      const oldColor = btn.style.color;
+
+      btn.innerText = 'Sending...';
+      btn.disabled = true;
+      btn.style.backgroundColor = cssVar('--primary2');
+      btn.style.color = 'white';
+
+      const t = setTimeout(() => {
+        showToast('Timeout: no response from server', 'error');
+        btn.innerText = oldText;
+        btn.disabled = false;
+        btn.style.backgroundColor = oldBg;
+        btn.style.color = oldColor;
+      }, 45000);
+
+      google.script.run
+        .withSuccessHandler(msg => {
+          clearTimeout(t);
+          const txt = String(msg || '');
+          const upper = txt.toUpperCase();
+          const isBad = upper.includes('ERROR') || upper.includes('BLOCK OPEN');
+          showToast(txt || 'Done', isBad ? 'error' : 'success');
+
+          btn.innerText = oldText;
+          btn.disabled = false;
+          btn.style.backgroundColor = oldBg;
+          btn.style.color = oldColor;
+        })
+        .withFailureHandler(err => {
+          clearTimeout(t);
+          let txt = '';
+          if (err && err.message) txt = err.message;
+          else {
+            try { txt = JSON.stringify(err); } catch (e) { txt = String(err); }
+          }
+          showToast('Backend error: ' + (txt || 'Unknown'), 'error');
+
+          btn.innerText = oldText;
+          btn.disabled = false;
+          btn.style.backgroundColor = oldBg;
+          btn.style.color = oldColor;
+        })
+        .sendAuditReport(loc, blockNum, sessionUser.email, includeOpen);
+    }
+
+    function signOff(blockNum, btn) {
+      const loc = document.getElementById('admin-loc').value;
+      const signer = (sessionUser && (sessionUser.user || sessionUser.email)) ? (sessionUser.user || sessionUser.email) : 'admin';
+
+      const ok = confirm("Sign off this block? This will write your name and timestamp to all records in this block.");
+      if (!ok) {
+        showToast('Sign-off cancelled', 'error');
+        return;
+      }
+
+      const oldText = btn.innerText;
+      const oldBg = btn.style.backgroundColor;
+      const oldColor = btn.style.color;
+
+      btn.innerText = 'Signing...';
+      btn.disabled = true;
+      btn.style.backgroundColor = cssVar('--primary2');
+      btn.style.color = 'white';
+
+      const t = setTimeout(() => {
+        showToast('Timeout: no response from server', 'error');
+        btn.innerText = oldText;
+        btn.disabled = false;
+        btn.style.backgroundColor = oldBg;
+        btn.style.color = oldColor;
+      }, 45000);
+
+      google.script.run
+        .withSuccessHandler(res => {
+          clearTimeout(t);
+          const ok = res && res.ok;
+          const msg = res && (res.message || res.error) ? (res.message || res.error) : 'Done';
+          showToast(msg, ok ? 'success' : 'error');
+
+          btn.innerText = oldText;
+          btn.disabled = false;
+          btn.style.backgroundColor = oldBg;
+          btn.style.color = oldColor;
+        })
+        .withFailureHandler(err => {
+          clearTimeout(t);
+          let txt = '';
+          if (err && err.message) txt = err.message;
+          else {
+            try { txt = JSON.stringify(err); } catch (e) { txt = String(err); }
+          }
+          showToast('Backend error: ' + (txt || 'Unknown'), 'error');
+
+          btn.innerText = oldText;
+          btn.disabled = false;
+          btn.style.backgroundColor = oldBg;
+          btn.style.color = oldColor;
+        })
+        .signOffBlock(loc, blockNum, signer, false);
+    }
+
+    function openSectionModal() {
+      const modal = document.getElementById('section-modal');
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeSectionModal() {
+      const modal = document.getElementById('section-modal');
+      if (!modal) return;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function handleCreateSection() {
+      const loc = document.getElementById('admin-loc').value;
+      const length = document.getElementById('sec-length').value;
+      const startCh = document.getElementById('sec-start').value;
+      const direction = document.getElementById('sec-direction').value;
+      const btn = document.getElementById('sec-create-btn');
+
+      if (!loc) {
+        showToast('Missing location', 'error');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'Saving...';
+      btn.style.backgroundColor = cssVar('--primary2');
+
+      google.script.run
+        .withSuccessHandler(res => {
+          btn.disabled = false;
+          btn.innerText = 'Create';
+          btn.style.backgroundColor = cssVar('--primary');
+
+          if (res && res.ok) {
+            showToast('Section created', 'success');
+            closeSectionModal();
+            loadBlocks();
+          } else {
+            showToast(res && res.error ? res.error : 'Error creating section', 'error');
+          }
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.innerText = 'Create';
+          btn.style.backgroundColor = cssVar('--primary');
+          const txt = (err && err.message) ? err.message : String(err);
+          showToast('Backend error: ' + txt, 'error');
+        })
+        .createSection({ location: loc, length: length, startChainage: startCh, direction: direction });
+    }
+  </script>
+</body>
+</html>

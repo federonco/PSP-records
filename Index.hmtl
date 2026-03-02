@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <!-- ✅ Guaranteed /exec URL for redirects -->
+  <meta name="app-url" content="<?= ScriptApp.getService().getUrl() ?>">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <style>
+    /* ===== THEME TOKENS (EDIT ONLY THIS BLOCK) ===== */
+    :root{
+      --bg: #F5F7F8;          /* app background */
+      --surface: #FFFFFF;     /* cards */
+      --ink: #2C4F66;         /* dark panels / header */
+      --text: #0F172A;        /* main text */
+      --muted: #64748B;       /* secondary text */
+      --border: #E2E8F0;      /* borders */
+
+      --primary: #1E90FF;     /* brand */
+      --primary2: #0B5ED7;    /* brand hover */
+
+      --success: #16A34A;     /* ok */
+      --warning: #FBBF24;     /* confirm / tolerance */
+      --danger: #FF4D4D;      /* duplicate / error */
+
+      --disabled: #CBD5E1;    /* disabled button */
+      --focus: #93C5FD;       /* focus ring-ish */
+
+      /* Optional: warning field bg/text (more consistent than color-mix) */
+      --warnBg: #FFF7ED;
+      --warnText: #9A3412;
+
+      /* Optional: "valid filled" field bg/text */
+      --okBg: #EFF6FF;
+      --okBorder: #BFDBFE;
+      --okText: #1E3A8A;
+    }
+
+    /* ===== small animations / input tweaks ===== */
+    @keyframes progress {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(250%); }
+    }
+    .animate-progress { animation: progress 2s ease-in-out infinite; }
+
+    input::-webkit-outer-spin-button,
+    input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+  </style>
+</head>
+
+<body class="bg-[var(--bg)] text-[var(--text)] font-sans selection:bg-[var(--primary)]/20 overflow-x-hidden">
+  <div id="app" class="max-w-md mx-auto h-screen flex flex-col relative">
+
+    <header class="bg-[var(--ink)] px-6 py-3 text-center border-b-4 border-[var(--primary)] sticky top-0 z-20 shadow-md rounded-b-[2.5rem]">
+      <h1 class="text-white font-black text-xl italic uppercase tracking-tighter flex items-center justify-center gap-2">
+        <div class="w-2 h-6 bg-[var(--primary)] skew-x-[-15deg]"></div>
+        PSP Site Log 123
+      </h1>
+      <p class="text-[var(--muted)] text-[10px] uppercase font-bold mt-1 tracking-[0.2em]">Quality Assurance</p>
+    </header>
+
+    <div class="p-3 space-y-2">
+
+      <div id="toast" class="hidden fixed top-4 left-4 right-4 z-50 p-4 rounded-xl text-center text-xs font-bold shadow-lg animate-in slide-in-from-top-2 duration-200"></div>
+
+      <div class="bg-[var(--surface)] p-3 rounded-2xl shadow-sm border border-[var(--border)]">
+        <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Work Location</label>
+        <select id="location" onchange="fetchChainage()"
+          class="w-full px-3 py-2 bg-[var(--bg)] border border-[var(--border)] rounded-lg font-bold text-sm text-[var(--text)] outline-none appearance-none cursor-pointer focus:border-[var(--focus)] transition-colors leading-tight">
+          <option>McLennan Dr - SEC3</option>
+        </select>
+      </div>
+
+      <!-- Current Chainage -->
+      <div id="ch-container"
+        class="rounded-3xl p-3 shadow-xl relative overflow-hidden flex flex-col items-center transition-colors duration-300"
+        style="background-color: var(--ink);">
+        <div class="absolute top-0 right-0 w-24 h-24 opacity-5 -mr-10 -mt-10 rounded-full"
+          style="background-color: var(--primary);"></div>
+
+        <span id="ch-label" class="text-[10px] font-black uppercase tracking-[0.15em] mb-4 block"
+          style="color: color-mix(in srgb, var(--primary) 70%, white);">
+          Current Chainage (m)
+        </span>
+
+        <div class="flex items-center justify-center w-full max-w-[280px]">
+          <button onclick="adjustCh(-1)"
+            class="w-10 h-10 flex-none rounded-2xl flex items-center justify-center font-bold text-2xl active:scale-90 transition-all shadow-lg"
+            style="background-color: rgba(255,255,255,0.08); color: white;">–</button>
+
+          <div class="flex-1 flex justify-center">
+            <input id="chainage" type="number" inputmode="numeric" onchange="checkCh()"
+              class="w-full bg-transparent text-white text-4xl font-black text-center outline-none transition-colors cursor-text"
+              style="caret-color: var(--primary);"
+              placeholder="..." />
+          </div>
+
+          <button onclick="adjustCh(1)"
+            class="w-10 h-10 flex-none rounded-2xl flex items-center justify-center font-bold text-2xl active:scale-90 transition-all shadow-lg"
+            style="background-color: rgba(255,255,255,0.08); color: white;">+</button>
+        </div>
+      </div>
+
+      <div id="layers-container" class="space-y-4"></div>
+
+      <div class="bg-[var(--surface)] p-4 rounded-2xl shadow-sm border border-[var(--border)]">
+        <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Site Inspector</label>
+        <select id="supervisor"
+          class="w-full p-3 bg-[var(--bg)] border-2 border-[var(--border)] rounded-xl font-bold text-[var(--text)] outline-none appearance-none cursor-pointer focus:border-[var(--focus)] transition-colors">
+          <option>Adam O'Neil</option>
+          <option>Cliff Dawson</option>
+        </select>
+      </div>
+
+      <div class="bg-[var(--surface)] p-4 rounded-2xl shadow-sm border border-[var(--border)]">
+        <label class="text-[10px] font-black text-[var(--muted)] uppercase tracking-widest block mb-2">Supervisor Sign-Off</label>
+        <div class="text-[10px] font-bold mb-2" style="color: var(--muted);">
+          Current CH: <span id="signoff-ch">—</span>
+        </div>
+        <div id="signoff-status" class="text-sm font-black mb-3" style="color: var(--text);">Not signed</div>
+        <div class="flex items-center gap-2 mb-3">
+          <input id="signoff-force" type="checkbox" class="accent-[var(--warning)]" />
+          <label for="signoff-force" class="text-[10px] font-black uppercase tracking-widest" style="color: var(--muted);">Force overwrite</label>
+        </div>
+        <button id="signoff-btn" onclick="handleSignOff()"
+          class="w-full py-3 rounded-xl text-white font-black uppercase tracking-[0.2em] shadow-lg transition-all"
+          style="background-color: var(--disabled);" disabled>
+          Sign Off
+        </button>
+      </div>
+
+      <div class="pt-4 relative">
+        <div id="progress-bar" class="hidden absolute top-0 left-0 right-0 h-1 rounded-full overflow-hidden z-10"
+          style="background-color: color-mix(in srgb, var(--border) 60%, white);">
+          <div class="h-full animate-progress" style="width: 40%; background-color: var(--primary);"></div>
+        </div>
+
+        <button id="lodge-btn" onclick="handleLodge()"
+          class="w-full py-5 rounded-2xl text-white font-black uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center gap-3"
+          style="background-color: var(--disabled);" disabled>
+          Lodge Site Record
+        </button>
+      </div>
+
+      <!-- FOOTER -->
+      <footer class="text-center py-2 text-[10px] font-normal tracking-[0.1em] select-none"
+        style="position:relative; color: var(--muted); line-height: 1.35;">
+        <div class="flex items-center justify-center gap-2">
+          <span>Created by</span>
+          <img
+            src="https://raw.githubusercontent.com/federonco/readx-assets/main/readX%20brown.png"
+            alt="readX logo"
+            style="height:12px; vertical-align:middle;"
+          />
+          <sup style="font-size:8px; position:relative; top:-2px;">™</sup>
+        </div>
+        <div style="opacity:0.85;">
+          for APA (Quality Management Systems) — All rights reserved • V3.1
+        </div>
+
+        <!-- ✅ Hidden Admin Trigger (5 taps in 1.2s) -->
+        <div id="admin-trigger"
+          title=""
+          style="
+            position:absolute;
+            right:10px;
+            bottom:10px;
+            width:28px;
+            height:28px;
+            opacity:0.01;
+            cursor:pointer;
+            user-select:none;">
+        </div>
+      </footer>
+
+    </div>
+  </div>
+
+  <script>
+    const CHAINAGE_INCREMENT = 20;
+    const state = {
+      isDuplicate: false,
+      checking: false,
+      confirming: false,
+      lodging: false,
+      lastLodgedChainage: null,
+      signoff: { exists: false, signed: false, value: "" },
+      layers: {
+        1: { l150: '', l450: '', l750: '' },
+        2: { l150: '', l450: '', l750: '' },
+        3: { l150: '', l450: '', l750: '' }
+      }
+    };
+
+    const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+    window.onload = () => {
+      renderLayers();
+      fetchChainage();
+    };
+
+    function fetchChainage() {
+      const location = document.getElementById('location').value;
+      google.script.run.withSuccessHandler(ch => {
+        document.getElementById('chainage').value = ch;
+        checkCh();
+        refreshSignOffStatus();
+      }).getLastChainage(location);
+    }
+
+    function renderLayers() {
+      const container = document.getElementById('layers-container');
+      container.innerHTML = [1, 2, 3].map(n => `
+        <div class="rounded-xl shadow-sm overflow-hidden mb-4 border-l-4"
+             style="background-color: var(--surface); border-left-color: var(--primary); border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+          <div class="px-4 py-2 border-b flex justify-between items-center"
+               style="background-color: color-mix(in srgb, var(--bg) 85%, white); border-bottom-color: var(--border);">
+            <span class="text-[10px] font-black uppercase tracking-widest" style="color: var(--muted);">Layer ${n}</span>
+            <span class="text-[10px] font-bold tracking-tighter" style="color: var(--primary);">NUMBER OF BLOWS</span>
+          </div>
+          <div class="p-4 grid grid-cols-3 gap-2">
+            ${['l150', 'l450', 'l750'].map((key, idx) => {
+              const ranges = ['150-450mm', '450-750mm', '750-1050mm'];
+              return `
+                <div class="flex flex-col items-center">
+                  <label class="text-[9px] font-bold uppercase mb-1" style="color: var(--muted);">${ranges[idx]}</label>
+                  <div class="relative w-full">
+                    <input
+                      type="number"
+                      inputmode="numeric"
+                      data-layer="${n}"
+                      data-key="${key}"
+                      oninput="updateVal(${n}, '${key}', this.value, this)"
+                      class="layer-input w-full p-2 text-center font-bold text-lg rounded-lg border-2 transition-all outline-none"
+                      style="background-color: var(--bg); border-color: var(--border); color: var(--muted);"
+                      placeholder="0">
+                    <div class="tolerance-msg hidden absolute -bottom-4 left-0 right-0 text-[8px] font-black text-center uppercase whitespace-nowrap"
+                         style="color: var(--warning);">
+                      Out of tolerance
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function updateVal(layer, key, val, el) {
+      state.layers[layer][key] = val;
+      state.confirming = false;
+
+      const input = el;
+      const msg = input.nextElementSibling;
+      const num = Number(val);
+
+      const isFilled = val !== '';
+      const isOut = isFilled && (num < 0 || num > 30);
+
+      if (isOut) {
+        input.style.backgroundColor = cssVar('--warnBg');
+        input.style.borderColor = cssVar('--warning');
+        input.style.color = cssVar('--warnText');
+        msg.classList.remove('hidden');
+      } else {
+        msg.classList.add('hidden');
+
+        if (isFilled) {
+          input.style.backgroundColor = cssVar('--okBg');
+          input.style.borderColor = cssVar('--okBorder');
+          input.style.color = cssVar('--okText');
+        } else {
+          input.style.backgroundColor = cssVar('--bg');
+          input.style.borderColor = cssVar('--border');
+          input.style.color = cssVar('--muted');
+        }
+      }
+
+      validateForm();
+    }
+
+    function validateForm() {
+      const allFilled = Object.values(state.layers).every(l => Object.values(l).every(v => v !== ''));
+      const allValid  = Object.values(state.layers).every(l => Object.values(l).every(v => Number(v) >= 0 && Number(v) <= 30));
+      const btn = document.getElementById('lodge-btn');
+
+      if (allFilled && allValid && !state.isDuplicate && !state.checking && !state.lodging) {
+        btn.disabled = false;
+        btn.style.backgroundColor = state.confirming ? cssVar('--warning') : cssVar('--success');
+        btn.innerText = state.confirming ? 'CONFIRM?' : 'Lodge Site Record';
+      } else {
+        btn.disabled = true;
+        btn.style.backgroundColor = cssVar('--disabled');
+        btn.innerText = 'Lodge Site Record';
+      }
+    }
+
+    function adjustCh(val) {
+      const input = document.getElementById('chainage');
+      const current = Number(input.value || 0);
+      input.value = current + (val * CHAINAGE_INCREMENT);
+      checkCh();
+    }
+
+    let chTimer;
+    function checkCh() {
+      clearTimeout(chTimer);
+      state.checking = true;
+      state.isDuplicate = false;
+
+      const ch = document.getElementById('chainage').value;
+      const location = document.getElementById('location').value;
+      const label = document.getElementById('ch-label');
+      const container = document.getElementById('ch-container');
+
+      label.innerText = 'CHECKING REGISTER...';
+      container.style.backgroundColor = cssVar('--ink');
+      validateForm();
+
+      chTimer = setTimeout(() => {
+        google.script.run.withSuccessHandler(exists => {
+          state.checking = false;
+          state.isDuplicate = exists;
+
+          if (exists) {
+            label.innerText = 'CHAINAGE ALREADY RECORDED';
+            container.style.backgroundColor = cssVar('--danger');
+          } else {
+            label.innerText = 'Current Chainage (m)';
+            container.style.backgroundColor = cssVar('--ink');
+          }
+          validateForm();
+          refreshSignOffStatus();
+        }).isChainageDuplicate(location, ch);
+      }, 500);
+    }
+
+    function handleLodge() {
+      if (!state.confirming) {
+        state.confirming = true;
+        validateForm();
+      } else {
+        submitData();
+      }
+    }
+
+    function submitData() {
+      state.lodging = true;
+      state.confirming = false;
+
+      const btn = document.getElementById('lodge-btn');
+      btn.disabled = true;
+      btn.innerText = 'Lodging Record...';
+      btn.style.backgroundColor = cssVar('--primary');
+
+      document.getElementById('progress-bar').classList.remove('hidden');
+      showToast('Processing Lodge...', 'info');
+
+      const payload = {
+        location: document.getElementById('location').value,
+        chainage: document.getElementById('chainage').value,
+        supervisor: document.getElementById('supervisor').value,
+        l1_150: state.layers[1].l150, l1_450: state.layers[1].l450, l1_750: state.layers[1].l750,
+        l2_150: state.layers[2].l150, l2_450: state.layers[2].l450, l2_750: state.layers[2].l750,
+        l3_150: state.layers[3].l150, l3_450: state.layers[3].l450, l3_750: state.layers[3].l750
+      };
+
+      google.script.run.withSuccessHandler(res => {
+        state.lodging = false;
+        document.getElementById('progress-bar').classList.add('hidden');
+
+        if (res.ok) {
+          showToast(`Successfully lodged: CH ${payload.chainage}`, 'success');
+          state.lastLodgedChainage = payload.chainage;
+          resetForm(res.nextCh);
+          refreshSignOffStatus(true);
+        } else {
+          showToast(res && res.error ? res.error : 'Error saving file', 'error');
+          validateForm();
+        }
+      }).saveData(payload);
+    }
+
+    function resetForm(nextCh) {
+      document.getElementById('chainage').value = nextCh;
+
+      state.layers = {
+        1: { l150: '', l450: '', l750: '' },
+        2: { l150: '', l450: '', l750: '' },
+        3: { l150: '', l450: '', l750: '' }
+      };
+
+      const inputs = document.querySelectorAll('.layer-input');
+      inputs.forEach(input => {
+        input.value = '';
+        input.style.backgroundColor = cssVar('--bg');
+        input.style.borderColor = cssVar('--border');
+        input.style.color = cssVar('--muted');
+        if (input.nextElementSibling) input.nextElementSibling.classList.add('hidden');
+      });
+
+      checkCh();
+      validateForm();
+    }
+
+    function getSignOffChainage() {
+      const inputVal = document.getElementById('chainage').value;
+      return state.lastLodgedChainage != null ? state.lastLodgedChainage : inputVal;
+    }
+
+    function refreshSignOffStatus(useLodged) {
+      const loc = document.getElementById('location').value;
+      const ch = useLodged ? state.lastLodgedChainage : getSignOffChainage();
+      const chLabel = document.getElementById('signoff-ch');
+      const statusEl = document.getElementById('signoff-status');
+
+      chLabel.innerText = ch != null && ch !== '' ? ch : '—';
+      statusEl.innerText = 'Checking...';
+
+      if (ch == null || String(ch).trim() === '') {
+        state.signoff = { exists: false, signed: false, value: "" };
+        updateSignOffUI_();
+        return;
+      }
+
+      google.script.run.withSuccessHandler(res => {
+        state.signoff = res || { exists: false, signed: false, value: "" };
+        updateSignOffUI_();
+      }).getSignOffStatus(loc, ch);
+    }
+
+    function updateSignOffUI_() {
+      const statusEl = document.getElementById('signoff-status');
+      const btn = document.getElementById('signoff-btn');
+      const force = document.getElementById('signoff-force').checked;
+
+      if (!state.signoff.exists) {
+        statusEl.innerText = 'Not lodged yet';
+        btn.disabled = true;
+        btn.style.backgroundColor = cssVar('--disabled');
+        return;
+      }
+
+      if (state.signoff.signed) {
+        statusEl.innerText = `Signed: ${state.signoff.value}`;
+        btn.disabled = !force;
+        btn.style.backgroundColor = force ? cssVar('--warning') : cssVar('--disabled');
+        return;
+      }
+
+      statusEl.innerText = 'Not signed';
+      btn.disabled = false;
+      btn.style.backgroundColor = cssVar('--success');
+    }
+
+    document.getElementById('signoff-force').addEventListener('change', () => {
+      updateSignOffUI_();
+    });
+
+    function handleSignOff() {
+      const loc = document.getElementById('location').value;
+      const ch = getSignOffChainage();
+      const signer = document.getElementById('supervisor').value;
+      const force = document.getElementById('signoff-force').checked;
+
+      if (!ch || String(ch).trim() === '') {
+        showToast('No chainage selected to sign', 'error');
+        return;
+      }
+
+      if (!state.signoff.exists) {
+        showToast('Cannot sign: chainage not lodged yet', 'error');
+        return;
+      }
+
+      const ok = confirm(`This will sign off CH ${ch}. Proceed?`);
+      if (!ok) return;
+
+      const btn = document.getElementById('signoff-btn');
+      const oldText = btn.innerText;
+      btn.innerText = 'Signing...';
+      btn.disabled = true;
+      btn.style.backgroundColor = cssVar('--primary2');
+
+      google.script.run.withSuccessHandler(res => {
+        const isOk = res && res.ok;
+        const msg = res && (res.message || res.value) ? (res.message || res.value) : 'Done';
+        showToast(msg, isOk ? 'success' : 'error');
+        refreshSignOffStatus(true);
+
+        btn.innerText = oldText;
+      }).withFailureHandler(err => {
+        const msg = err && err.message ? err.message : String(err);
+        showToast(msg, 'error');
+        btn.innerText = oldText;
+        updateSignOffUI_();
+      }).signOffByChainage(loc, ch, signer, force);
+    }
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+
+      const bg =
+        type === 'success' ? cssVar('--success') :
+        type === 'error'   ? cssVar('--danger')  :
+                             cssVar('--primary');
+
+      t.style.backgroundColor = bg;
+      t.style.color = 'white';
+
+      t.className = 'fixed top-4 left-4 right-4 z-50 p-4 rounded-xl text-center text-xs font-bold shadow-lg animate-in slide-in-from-top-2 duration-200 block';
+      setTimeout(() => t.classList.add('hidden'), 5000);
+    }
+
+    // ===== ✅ Hidden Admin Access (5 taps in 1.2s) - robust redirect =====
+    (function setupHiddenAdminTrigger(){
+      const el = document.getElementById('admin-trigger');
+      if (!el) return;
+
+      let taps = 0;
+      let timer = null;
+
+      function goAdmin(){
+        const meta = document.querySelector('meta[name="app-url"]');
+        const baseExec = meta ? meta.getAttribute('content') : null;
+
+        const url = new URL(baseExec || window.location.href);
+        url.searchParams.set('view', 'admin');
+        window.top.location.href = url.toString();
+      }
+
+      el.addEventListener('click', () => {
+        taps++;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => { taps = 0; }, 1200);
+
+        if (taps >= 5) {
+          taps = 0;
+          clearTimeout(timer);
+          showToast('Admin access...', 'info');
+          setTimeout(goAdmin, 200);
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
