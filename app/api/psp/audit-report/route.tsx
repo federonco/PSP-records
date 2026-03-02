@@ -9,12 +9,8 @@ export const runtime = "nodejs";
 const styles = StyleSheet.create({
   page: { padding: 24, fontSize: 9 },
   heading: { fontSize: 12, marginBottom: 8 },
-  table: { display: "flex", width: "auto", borderStyle: "solid", borderWidth: 1 },
-  row: { flexDirection: "row" },
-  headerRow: { flexDirection: "row", minHeight: 26 },
-  dataRow: { flexDirection: "row", minHeight: 28 },
-  cell: { borderStyle: "solid", borderWidth: 1, padding: 3, flexGrow: 1 },
-  headerCell: { backgroundColor: "#1a1e2e", fontWeight: 700 },
+  rawBlock: { fontSize: 7, lineHeight: 1.2 },
+  divider: { height: 6 },
 });
 
 export async function POST(request: NextRequest) {
@@ -37,9 +33,7 @@ export async function POST(request: NextRequest) {
   const supabase = getSupabaseServer({ useServiceRole: true });
   const { data: records, error } = await supabase
     .from("psp_records")
-    .select(
-      "chainage,recorded_at,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,site_inspector,sign_off_by,sign_off_at",
-    )
+    .select("*")
     .eq("location_id", locationId)
     .order("chainage", { ascending: false });
 
@@ -47,38 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const headers = [
-    "Chainage",
-    "Recorded",
-    "L1 150",
-    "L1 450",
-    "L1 750",
-    "L2 150",
-    "L2 450",
-    "L2 750",
-    "L3 150",
-    "L3 450",
-    "L3 750",
-    "Inspector",
-    "Sign-off",
-  ];
-  const columnWidths = [
-    44, // Chainage
-    70, // Recorded
-    36, // L1 150
-    36, // L1 450
-    36, // L1 750
-    36, // L2 150
-    36, // L2 450
-    36, // L2 750
-    36, // L3 150
-    36, // L3 450
-    36, // L3 750
-    60, // Inspector
-    70, // Sign-off
-  ];
-
-  const pageSize = 10;
+  const pageSize = 3;
   const chunks: typeof records[] = [];
   for (let i = 0; i < (records?.length ?? 0); i += pageSize) {
     chunks.push((records ?? []).slice(i, i + pageSize));
@@ -103,75 +66,13 @@ export async function POST(request: NextRequest) {
           {blockIndex ? <Text>Report #: {blockIndex}</Text> : null}
           {status ? <Text>Status: {status}</Text> : null}
           {pending?.length ? <Text>Pending: {pending.join(", ")}</Text> : null}
-          <View style={{ height: 8 }} />
-          <View style={styles.table}>
-            <View style={styles.headerRow}>
-              {headers.map((label, idx) => (
-                <Text
-                  key={label}
-                  style={[
-                    styles.cell,
-                    styles.headerCell,
-                    { width: columnWidths[idx], flexGrow: 0, flexShrink: 0 },
-                  ]}
-                >
-                  {label}
-                </Text>
-              ))}
-            </View>
-            {chunk.map((record) => (
-              <View key={record.chainage} style={styles.dataRow}>
-                <Text style={[styles.cell, { width: columnWidths[0], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.chainage}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[1], flexGrow: 0, flexShrink: 0 }]}>
-                  {new Date(record.recorded_at).toLocaleDateString()}
-                  {"\n"}
-                  {new Date(record.recorded_at).toLocaleTimeString()}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[2], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l1_150}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[3], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l1_450}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[4], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l1_750}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[5], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l2_150}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[6], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l2_450}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[7], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l2_750}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[8], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l3_150}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[9], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l3_450}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[10], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.l3_750}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[11], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.site_inspector}
-                  {"\n"}
-                </Text>
-                <Text style={[styles.cell, { width: columnWidths[12], flexGrow: 0, flexShrink: 0 }]}>
-                  {record.sign_off_by
-                    ? `${record.sign_off_by} @ ${
-                        record.sign_off_at
-                          ? new Date(record.sign_off_at).toLocaleString()
-                          : ""
-                      }`
-                    : "—"}
-                </Text>
-              </View>
-            ))}
-          </View>
+          <View style={styles.divider} />
+          {chunk.map((record, recordIndex) => (
+            <Text key={`${recordIndex}-${record.chainage ?? "row"}`} style={styles.rawBlock}>
+              {JSON.stringify(record, null, 2)}
+              {"\n\n"}
+            </Text>
+          ))}
         </Page>
         );
       })}

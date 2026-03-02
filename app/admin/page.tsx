@@ -939,6 +939,11 @@ type CompactionReportRow = {
                 {compactionReports.map((report) => {
                   const range = report.block_key.replace("-", " → ");
                   const isOpen = report.status === "OPEN";
+                  const pendingCount = report.pending_chainages?.length ?? 0;
+                  const completedCount = Math.max(0, BLOCK_SIZE - pendingCount);
+                  const progressPercent = Math.round(
+                    (completedCount / BLOCK_SIZE) * 100,
+                  );
                   return (
                     <div
                       key={report.id}
@@ -965,6 +970,20 @@ type CompactionReportRow = {
                           <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                             Pending Ch: {report.pending_chainages.join(", ")}
                           </p>
+                        ) : null}
+                        {isOpen ? (
+                          <div className="mt-2 space-y-1">
+                            <div className="flex items-center justify-between text-[10px] text-[var(--muted-foreground)]">
+                              <span>Complete</span>
+                              <span>{progressPercent}%</span>
+                            </div>
+                            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-alt)]">
+                              <div
+                                className="h-full rounded-full bg-[#f59e0b]"
+                                style={{ width: `${progressPercent}%` }}
+                              />
+                            </div>
+                          </div>
                         ) : null}
                       </div>
                       <Button
