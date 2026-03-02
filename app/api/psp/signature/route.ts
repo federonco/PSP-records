@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 type SignaturePayload = {
@@ -9,11 +8,6 @@ type SignaturePayload = {
 };
 
 export async function POST(request: NextRequest) {
-  const { user } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const body = await request.json();
   const { locationId, chainage, inspectorName, signatureStrokes } = body;
 

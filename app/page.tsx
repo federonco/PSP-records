@@ -29,15 +29,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
  import { Input } from "@/components/ui/input";
- import {
-   Select,
-   SelectContent,
-   SelectItem,
-   SelectTrigger,
-   SelectValue,
- } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
- type Location = { id: string; name: string };
+ type Location = { id: string; name: string; penetrometer_serial?: number | null };
+ type Penetrometer = { id: string; serial_number: number; sort_order: number };
  type Section = { id: string; name: string };
 
  const layerFields = [
@@ -54,7 +61,7 @@ import {
 
  type LayerKey = (typeof layerFields)[number]["key"];
 
- const inspectorOptions = ["Inspector A", "Inspector B", "Inspector C"];
+const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
 
  export default function Home() {
    const supabase = getSupabaseBrowser();
@@ -86,6 +93,12 @@ import {
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
+  const [penetrometers, setPenetrometers] = useState<Penetrometer[]>([]);
+  const [penetrometerAddOpen, setPenetrometerAddOpen] = useState(false);
+  const [penetrometerEditOpen, setPenetrometerEditOpen] = useState(false);
+  const [penetrometerAddInput, setPenetrometerAddInput] = useState("1");
+  const [penetrometerEditId, setPenetrometerEditId] = useState<string | null>(null);
+  const [penetrometerEditInput, setPenetrometerEditInput] = useState("1");
 
   const getAccessToken = async () => {
     const { data } = await supabase.auth.getSession();
@@ -122,44 +135,40 @@ import {
     }
   }, [adminAuthOpen, authEmail, router]);
 
-   useEffect(() => {
-     if (!authEmail) return;
-     const loadLocations = async () => {
-       const { data, error } = await supabase
-         .from("psp_locations")
-         .select("id,name")
-         .order("name");
-       if (error) {
-         pushToast({
-           type: "error",
-           title: "Failed to load locations",
-           message: error.message,
-         });
-         return;
-       }
-       setLocations(data ?? []);
-       if (data?.length) {
-         setLocationId(data[0].id);
-         setLocationName(data[0].name);
-       }
-     };
-     loadLocations();
-   }, [authEmail, pushToast, supabase]);
+  useEffect(() => {
+    const loadLocations = async () => {
+      const { data, error } = await supabase
+        .from("psp_locations")
+        .select("id,name,penetrometer_serial")
+        .order("name");
+      if (error) {
+        pushToast({
+          type: "error",
+          title: "Failed to load locations",
+          message: error.message,
+        });
+        return;
+      }
+      setLocations(data ?? []);
+      if (data?.length) {
+        const defaultLoc =
+          data.find((loc) => loc.name === "McLennan Dr - SEC3") ?? data[0];
+        setLocationId(defaultLoc.id);
+        setLocationName(defaultLoc.name);
+      }
+    };
+    loadLocations();
+  }, [pushToast, supabase]);
 
-   useEffect(() => {
-     if (authEmail) return;
-     setLocations([]);
-     setSections([]);
-     setLocationId("");
-     setSectionId("");
-     setLocationName("");
-     setChainage(0);
-     setDuplicate(false);
-     setRecordId(null);
-     setSignOffBy(null);
-     setSignOffAt(null);
-     setSignatureStrokes(null);
-   }, [authEmail]);
+  useEffect(() => {
+    if (authEmail) return;
+    setChainage(0);
+    setDuplicate(false);
+    setRecordId(null);
+    setSignOffBy(null);
+    setSignOffAt(null);
+    setSignatureStrokes(null);
+  }, [authEmail]);
 
    useEffect(() => {
      if (selectedLocation) {
@@ -167,8 +176,28 @@ import {
      }
    }, [selectedLocation]);
 
-   useEffect(() => {
-     if (!authEmail || !locationId) return;
+  useEffect(() => {
+    if (!locationId) return;
+    const loadPenetrometers = async () => {
+      const token = await getAccessToken();
+      const response = await fetch(
+        `/api/psp/penetrometers?locationId=${locationId}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        },
+      );
+      const payload = await response.json();
+      if (response.ok && Array.isArray(payload.penetrometers)) {
+        setPenetrometers(payload.penetrometers);
+      } else {
+        setPenetrometers([]);
+      }
+    };
+    loadPenetrometers();
+  }, [locationId]);
+
+  useEffect(() => {
+    if (!locationId) return;
      const loadSections = async () => {
       const token = await getAccessToken();
        const response = await fetch(
@@ -194,7 +223,7 @@ import {
        }
      };
      loadSections();
-   }, [authEmail, locationId, pushToast, supabase]);
+  }, [locationId, pushToast, supabase]);
 
   useEffect(() => {
     if (!locationId) return;
@@ -221,19 +250,11 @@ import {
   }, [locationId, pushToast, supabase]);
 
   useEffect(() => {
-     if (!locationId || !chainage || !authEmail) return;
+    if (!locationId || !chainage) return;
      const checkDuplicate = async () => {
       setChecking(true);
       try {
         const token = await getAccessToken();
-        if (!token) {
-          pushToast({
-            type: "error",
-            title: "Sign in required",
-            message: "Authenticate before checking duplicates.",
-          });
-          return;
-        }
         const response = await fetch(
           `/api/psp/exists?locationId=${locationId}&chainage=${chainage}`,
           {
@@ -257,7 +278,7 @@ import {
       }
      };
      checkDuplicate();
-  }, [authEmail, chainage, locationId, pushToast, supabase]);
+  }, [chainage, locationId, pushToast, supabase]);
 
   useEffect(() => {
     if (!Number.isFinite(chainage)) return;
@@ -305,15 +326,6 @@ import {
      if (!canSubmit || duplicate) return;
      setLoading(true);
     const token = await getAccessToken();
-    if (!token) {
-      pushToast({
-        type: "error",
-        title: "Sign in required",
-        message: "Authenticate before lodging records.",
-      });
-      setLoading(false);
-      return;
-    }
      const response = await fetch("/api/psp/records", {
        method: "POST",
        headers: {
@@ -339,6 +351,32 @@ import {
        });
        return;
      }
+    if (signatureStrokes) {
+      const signatureResponse = await fetch("/api/psp/signature", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          locationId,
+          chainage,
+          inspectorName: siteInspector,
+          signatureStrokes,
+        }),
+      });
+      const signaturePayload = await signatureResponse.json();
+      if (signatureResponse.ok) {
+        setSignOffBy(siteInspector);
+        setSignOffAt(signaturePayload.signOffAt ?? new Date().toISOString());
+      } else {
+        pushToast({
+          type: "error",
+          title: "Signature failed",
+          message: signaturePayload.error ?? "Unable to save signature",
+        });
+      }
+    }
      setLayers(
        Object.fromEntries(layerFields.map((field) => [field.key, ""])) as Record<
          LayerKey,
@@ -366,15 +404,6 @@ import {
      if (!canSubmit || !duplicate) return;
      setLoading(true);
     const token = await getAccessToken();
-    if (!token) {
-      pushToast({
-        type: "error",
-        title: "Sign in required",
-        message: "Authenticate before overwriting records.",
-      });
-      setLoading(false);
-      return;
-    }
      const response = await fetch("/api/psp/records/overwrite", {
        method: "POST",
        headers: {
@@ -405,23 +434,17 @@ import {
    };
 
    const handleSaveSignature = async (payload: SignatureStrokes) => {
-     if (!recordId) {
-       pushToast({
-         type: "warning",
-         title: "Record missing",
-         message: "Lodge the record before signing.",
-       });
-       return;
-     }
-    const token = await getAccessToken();
-    if (!token) {
+    if (!recordId) {
+      setSignatureStrokes(payload);
+      setSignatureOpen(false);
       pushToast({
-        type: "error",
-        title: "Sign in required",
-        message: "Authenticate before saving signatures.",
+        type: "info",
+        title: "Signature captured",
+        message: "Signature will be saved after lodging.",
       });
       return;
     }
+    const token = await getAccessToken();
      const response = await fetch("/api/psp/signature", {
        method: "POST",
        headers: {
@@ -466,7 +489,7 @@ import {
             </div>
             <Button
               variant="ghost"
-              className="psp-button psp-button-ghost h-9"
+              className="psp-button psp-button-ghost h-7 px-3 text-xs text-[var(--text-secondary)]"
               onClick={() => {
                 if (authEmail) {
                   router.push("/admin");
@@ -475,14 +498,9 @@ import {
                 }
               }}
             >
-              Admin mode
+              ⚙ Admin
             </Button>
           </div>
-          {!authEmail ? (
-            <p className="text-xs text-[var(--muted-foreground)]">
-              Sign in via Admin mode to lodge records.
-            </p>
-          ) : null}
         </header>
 
         <Card className="psp-card h-[90px] gap-3 py-3">
@@ -493,7 +511,6 @@ import {
             <Select
               value={locationSelectValue}
               onValueChange={(value) => setLocationId(value)}
-              disabled={!authEmail}
             >
               <SelectTrigger className="psp-input -mt-[5px] w-[320px]">
                 <SelectValue placeholder="Select location" />
@@ -520,7 +537,7 @@ import {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-[84px] w-[84px] rounded-full border-0 bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]"
+                className="h-[42px] w-[42px] rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90"
                 onClick={() =>
                   handleAdjustChainage(-CHAINAGE_STEP)
                 }
@@ -538,7 +555,7 @@ import {
               <Button
                 variant="outline"
                 size="icon"
-                className="h-[84px] w-[84px] rounded-full border-0 bg-[var(--surface)] text-[var(--ink)] shadow-[var(--shadow)]"
+                className="h-[42px] w-[42px] rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90"
                 onClick={() =>
                   handleAdjustChainage(CHAINAGE_STEP)
                 }
@@ -570,9 +587,105 @@ import {
 
         <Card className="psp-card">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
             <CardTitle className="text-sm">Layers</CardTitle>
-              <span className="text-xs text-[var(--muted-foreground)]">0 - 30</span>
+            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+              <span className="font-semibold">Penetrometer S/N:</span>
+              <Select
+                value={String(selectedLocation?.penetrometer_serial ?? 1)}
+                onValueChange={async (value) => {
+                  const sn = Number(value);
+                  if (!locationId || !Number.isInteger(sn)) return;
+                  const token = await getAccessToken();
+                  const res = await fetch(`/api/psp/locations/${locationId}`, {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ penetrometerSerial: sn }),
+                  });
+                  if (res.ok) {
+                    setLocations((prev) =>
+                      prev.map((loc) =>
+                        loc.id === locationId
+                          ? { ...loc, penetrometer_serial: sn }
+                          : loc,
+                      ),
+                    );
+                  } else {
+                    const payload = await res.json();
+                    pushToast({
+                      type: "error",
+                      title: "Failed to update penetrometer",
+                      message: payload.error ?? "Unknown error",
+                    });
+                  }
+                }}
+              >
+                <SelectTrigger className="h-8 w-[72px] border-0 bg-transparent px-1 py-0 text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(penetrometers.length
+                    ? penetrometers
+                    : [
+                        {
+                          id: "fallback",
+                          serial_number:
+                            selectedLocation?.penetrometer_serial ?? 1,
+                          sort_order: 0,
+                        },
+                      ]
+                  ).map((p) => (
+                    <SelectItem
+                      key={p.id}
+                      value={String(p.serial_number)}
+                      className="text-xs"
+                    >
+                      {p.serial_number}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 w-7 px-0 text-[var(--muted-foreground)]"
+                  >
+                    ⋮
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setPenetrometerAddOpen(true)}>
+                    Add new penetrometer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      const current =
+                        selectedLocation?.penetrometer_serial ?? 1;
+                      const p = penetrometers.find(
+                        (x) => x.serial_number === current,
+                      );
+                      if (p && p.id !== "fallback") {
+                        setPenetrometerEditId(p.id);
+                        setPenetrometerEditInput(String(p.serial_number));
+                        setPenetrometerEditOpen(true);
+                      } else {
+                        pushToast({
+                          type: "info",
+                          title: "Edit penetrometer",
+                          message:
+                            "Select a penetrometer from the list or add a new one first.",
+                        });
+                      }
+                    }}
+                  >
+                    Edit
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -627,11 +740,7 @@ import {
           <CardContent className="space-y-3">
             <div className="space-y-1">
               <label className="psp-label">Site Inspector</label>
-              <Select
-                value={siteInspector}
-                onValueChange={setSiteInspector}
-                disabled={!authEmail}
-              >
+              <Select value={siteInspector} onValueChange={setSiteInspector}>
                 <SelectTrigger className="psp-input">
                   <SelectValue placeholder="Select inspector" />
                 </SelectTrigger>
@@ -650,9 +759,9 @@ import {
                 <Button
                   type="button"
                   size="sm"
-                  className="psp-button psp-button-primary h-9 px-3 text-xs"
+                  className="psp-button h-9 px-3 text-xs bg-[#2F966A] text-white hover:bg-[#2F966A]/90"
                   onClick={() => setSignatureOpen(true)}
-                  disabled={!authEmail || !siteInspector}
+                  disabled={!siteInspector}
                 >
                   Tap to Sign
                 </Button>
@@ -675,13 +784,13 @@ import {
         </Card>
 
         <Card className="psp-card">
-          <CardContent className="pt-0">
+          <CardContent className="pt-0 text-[#51B58B]">
             <ConfirmButton
               label={loading ? "Lodging..." : "Lodge Record"}
               confirmLabel="CONFIRM?"
               onConfirm={handleLodge}
-              disabled={!authEmail || !canSubmit || loading || duplicate}
-              className="psp-button psp-button-primary w-full"
+              disabled={!canSubmit || loading || duplicate}
+              className="psp-button w-full bg-[#51B58B] text-white hover:bg-[#51B58B]/90"
               confirmClassName="psp-button-warning"
             />
           </CardContent>
@@ -691,7 +800,7 @@ import {
                 variant="destructive"
                 className="w-full"
                 onClick={() => setOverwriteOpen(true)}
-                disabled={!authEmail || !canSubmit}
+                disabled={!canSubmit}
               >
                 Proceed to overwrite
               </Button>
@@ -744,6 +853,184 @@ import {
             </Button>
             <Button variant="destructive" onClick={handleOverwrite}>
               Confirm overwrite
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={penetrometerAddOpen}
+        onOpenChange={(open) => {
+          setPenetrometerAddOpen(open);
+          if (!open) setPenetrometerAddInput("1");
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add new penetrometer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="psp-label">Serial number</label>
+            <Input
+              type="number"
+              min={1}
+              value={penetrometerAddInput}
+              onChange={(e) => setPenetrometerAddInput(e.target.value)}
+              className="psp-input"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPenetrometerAddOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                const sn = Number(penetrometerAddInput);
+                if (!locationId || !Number.isInteger(sn) || sn < 1) {
+                  pushToast({
+                    type: "error",
+                    title: "Invalid serial number",
+                    message: "Enter a positive integer.",
+                  });
+                  return;
+                }
+                const token = await getAccessToken();
+                const res = await fetch("/api/psp/penetrometers", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                  },
+                  body: JSON.stringify({ locationId, serialNumber: sn }),
+                });
+                const payload = await res.json();
+                if (res.ok) {
+                  setPenetrometers((prev) =>
+                    [...prev, payload.penetrometer].sort(
+                      (a, b) => a.sort_order - b.sort_order,
+                    ),
+                  );
+                  setLocations((prev) =>
+                    prev.map((loc) =>
+                      loc.id === locationId
+                        ? { ...loc, penetrometer_serial: sn }
+                        : loc,
+                    ),
+                  );
+                  setPenetrometerAddOpen(false);
+                  pushToast({ type: "success", title: "Penetrometer added" });
+                } else {
+                  pushToast({
+                    type: "error",
+                    title: "Failed to add penetrometer",
+                    message: payload.error ?? "Unknown error",
+                  });
+                }
+              }}
+            >
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={penetrometerEditOpen}
+        onOpenChange={(open) => {
+          setPenetrometerEditOpen(open);
+          if (!open) {
+            setPenetrometerEditId(null);
+            setPenetrometerEditInput("1");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit penetrometer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="psp-label">Serial number</label>
+            <Input
+              type="number"
+              min={1}
+              value={penetrometerEditInput}
+              onChange={(e) => setPenetrometerEditInput(e.target.value)}
+              className="psp-input"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPenetrometerEditOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!penetrometerEditId) return;
+                const sn = Number(penetrometerEditInput);
+                if (!Number.isInteger(sn) || sn < 1) {
+                  pushToast({
+                    type: "error",
+                    title: "Invalid serial number",
+                    message: "Enter a positive integer.",
+                  });
+                  return;
+                }
+                const token = await getAccessToken();
+                const res = await fetch(
+                  `/api/psp/penetrometers/${penetrometerEditId}`,
+                  {
+                    method: "PATCH",
+                    headers: {
+                      "Content-Type": "application/json",
+                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ serialNumber: sn }),
+                  },
+                );
+                const payload = await res.json();
+                if (res.ok) {
+                  const editedPen = penetrometers.find(
+                    (p) => p.id === penetrometerEditId,
+                  );
+                  const wasSelected =
+                    editedPen &&
+                    selectedLocation?.penetrometer_serial ===
+                      editedPen.serial_number;
+                  setPenetrometers((prev) =>
+                    prev
+                      .map((p) =>
+                        p.id === penetrometerEditId
+                          ? { ...p, serial_number: sn }
+                          : p,
+                      )
+                      .sort((a, b) => a.sort_order - b.sort_order),
+                  );
+                  if (wasSelected) {
+                    setLocations((prev) =>
+                      prev.map((loc) =>
+                        loc.id === locationId
+                          ? { ...loc, penetrometer_serial: sn }
+                          : loc,
+                      ),
+                    );
+                  }
+                  setPenetrometerEditOpen(false);
+                  pushToast({ type: "success", title: "Penetrometer updated" });
+                } else {
+                  pushToast({
+                    type: "error",
+                    title: "Failed to update penetrometer",
+                    message: payload.error ?? "Unknown error",
+                  });
+                }
+              }}
+            >
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

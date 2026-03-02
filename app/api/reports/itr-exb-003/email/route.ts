@@ -124,11 +124,14 @@ async function getEmailFromToken(request: NextRequest) {
 
 function getDefaultRecipient() {
   const allowlist = process.env.ADMIN_EMAIL_ALLOWLIST;
-  const firstAllowlist = allowlist
+  const recipients = allowlist
     ?.split(",")
     .map((item) => item.trim())
-    .find(Boolean);
-  return firstAllowlist || process.env.SMTP_USER || "";
+    .filter(Boolean);
+  if (recipients && recipients.length > 0) {
+    return recipients.join(", ");
+  }
+  return process.env.SMTP_USER || "";
 }
 
 async function generatePdfFromTemplate(params: {
@@ -218,12 +221,17 @@ async function generatePdfFromTemplate(params: {
 
   try {
     console.log("ITR template ID", templateId);
+    console.log("Drive folder ID", driveFolderId);
     const copyResponse = await drive.files.copy({
       fileId: templateId,
       requestBody: {
         name: `ITR-EXB-003_${locationName}_Rep${reportNum}_${Date.now()}`,
         parents: [driveFolderId],
       },
+      supportsAllDrives: true,
+    }).catch((err) => {
+      console.log("Copy error full", JSON.stringify(err?.response?.data, null, 2));
+      throw err;
     });
     copiedFileId = copyResponse.data.id ?? null;
     if (copiedFileId) {
@@ -233,17 +241,6 @@ async function generatePdfFromTemplate(params: {
       });
     }
     if (!copiedFileId) throw new Error("Failed to copy template");
-
-    await drive.permissions.create({
-      fileId: copiedFileId,
-      requestBody: {
-        role: "owner",
-        type: "user",
-        emailAddress: "ronco.fe@gmail.com",
-      },
-      transferOwnership: true,
-    });
-    console.log("ITR template ownership transferred", { copiedFileId });
 
     const requests = Object.entries(markers).map(([key, value]) => ({
       replaceAllText: {
@@ -264,7 +261,9 @@ async function generatePdfFromTemplate(params: {
     return { buffer, block };
   } finally {
     if (copiedFileId) {
-      await drive.files.delete({ fileId: copiedFileId }).catch(() => null);
+      await drive.files
+        .delete({ fileId: copiedFileId, supportsAllDrives: true })
+        .catch(() => null);
     }
   }
 }

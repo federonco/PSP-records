@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
-import { isAdminEmail } from "@/lib/admin";
 import { CHAINAGE_STEP } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -17,14 +15,6 @@ const layerKeys = [
 ] as const;
 
 export async function POST(request: NextRequest) {
-  const { user } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
 
   const body = await request.json();
   const {
@@ -51,9 +41,9 @@ export async function POST(request: NextRequest) {
   const layerPayload: Record<string, number> = {};
   for (const key of layerKeys) {
     const value = Number(layers?.[key]);
-    if (Number.isNaN(value) || value < 0 || value > 30) {
+    if (Number.isNaN(value) || value < 0 || value > 35) {
       return NextResponse.json(
-        { error: `Layer ${key} must be between 0 and 30` },
+        { error: `Layer ${key} must be between 0 and 35` },
         { status: 400 },
       );
     }

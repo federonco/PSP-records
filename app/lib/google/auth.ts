@@ -28,10 +28,22 @@ export function getGoogleAuthClient() {
   });
 }
 
+export function getGoogleOAuthClient() {
+  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN;
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error("Missing Google OAuth environment variables");
+  }
+  const client = new google.auth.OAuth2(clientId, clientSecret);
+  client.setCredentials({ refresh_token: refreshToken });
+  return client;
+}
+
 export function getGoogleDriveClient() {
-  return google.drive({ version: "v3", auth: getGoogleAuthClient() });
+  return google.drive({ version: "v3", auth: getGoogleOAuthClient() });
 }
 
 export function getGoogleDocsClient() {
-  return google.docs({ version: "v1", auth: getGoogleAuthClient() });
+  return google.docs({ version: "v1", auth: getGoogleOAuthClient() });
 }

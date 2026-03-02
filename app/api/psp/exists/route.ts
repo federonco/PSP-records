@@ -3,11 +3,8 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { resolveLocationId } from "@/lib/psp-logic";
 
- export async function GET(request: NextRequest) {
-   const { user, token } = await getUserFromRequest(request);
-   if (!user || !token) {
-     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-   }
+export async function GET(request: NextRequest) {
+  const { token } = await getUserFromRequest(request);
 
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get("locationId");
@@ -17,7 +14,7 @@ import { resolveLocationId } from "@/lib/psp-logic";
   const resolvedLocationId = await resolveLocationId({
     locationId,
     locationName,
-    accessToken: token,
+    accessToken: token ?? undefined,
   });
 
   if (!resolvedLocationId || Number.isNaN(chainage)) {
@@ -27,7 +24,9 @@ import { resolveLocationId } from "@/lib/psp-logic";
      );
    }
 
-   const supabase = getSupabaseServer({ accessToken: token });
+  const supabase = token
+    ? getSupabaseServer({ accessToken: token })
+    : getSupabaseServer({ useServiceRole: true });
    const { data, error } = await supabase
      .from("psp_records")
     .select("id,sign_off_by,sign_off_at,signature_strokes")

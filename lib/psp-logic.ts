@@ -36,7 +36,9 @@ export async function resolveLocationId({
   if (locationId) return locationId;
   if (!locationName) return null;
 
-  const supabase = getSupabaseServer({ accessToken: accessToken ?? undefined });
+  const supabase = accessToken
+    ? getSupabaseServer({ accessToken })
+    : getSupabaseServer({ useServiceRole: true });
   const { data, error } = await supabase
     .from("psp_locations")
     .select("id")
@@ -91,8 +93,8 @@ export function validateSaveData(input: Record<string, unknown>) {
       errors.push(`${key} is required`);
     } else if (!Number.isFinite(num)) {
       errors.push(`${key} must be a number`);
-    } else if (num < 0 || num > 30) {
-      errors.push(`${key} must be between 0 and 30`);
+    } else if (num < 0 || num > 35) {
+      errors.push(`${key} must be between 0 and 35`);
     }
     clean.layers[key] = num;
   });

@@ -2,7 +2,8 @@ create extension if not exists "pgcrypto";
 
 create table if not exists psp_locations (
   id uuid primary key default gen_random_uuid(),
-  name text unique not null
+  name text unique not null,
+  penetrometer_serial integer not null default 1
 );
 
 insert into psp_locations (name)
@@ -51,15 +52,15 @@ create table if not exists psp_records (
   sign_off_at timestamptz null,
   signature_strokes jsonb null,
   unique (location_id, chainage),
-  check (l1_150 between 0 and 30),
-  check (l1_450 between 0 and 30),
-  check (l1_750 between 0 and 30),
-  check (l2_150 between 0 and 30),
-  check (l2_450 between 0 and 30),
-  check (l2_750 between 0 and 30),
-  check (l3_150 between 0 and 30),
-  check (l3_450 between 0 and 30),
-  check (l3_750 between 0 and 30)
+  check (l1_150 between 0 and 35),
+  check (l1_450 between 0 and 35),
+  check (l1_750 between 0 and 35),
+  check (l2_150 between 0 and 35),
+  check (l2_450 between 0 and 35),
+  check (l2_750 between 0 and 35),
+  check (l3_150 between 0 and 35),
+  check (l3_450 between 0 and 35),
+  check (l3_750 between 0 and 35)
 );
 
 create table if not exists psp_reports (
@@ -117,7 +118,7 @@ create policy "reports_insert" on psp_reports
 create policy "admins_read" on psp_admins
   for select
   to authenticated
-  using (exists (select 1 from psp_admins where user_id = auth.uid()));
+  using (user_id = auth.uid());
 
 create policy "sections_read" on psp_sections
   for select

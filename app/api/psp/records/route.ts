@@ -5,10 +5,7 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
 
  export async function POST(request: NextRequest) {
-   const { user, token } = await getUserFromRequest(request);
-   if (!user || !token) {
-     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-   }
+  const { token } = await getUserFromRequest(request);
 
   const body = await request.json();
   const validation = validateSaveData(body);
@@ -19,14 +16,16 @@ import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
   const resolvedLocationId = await resolveLocationId({
     locationId: validation.clean.locationId,
     locationName: validation.clean.locationName,
-    accessToken: token,
+    accessToken: token ?? undefined,
   });
 
   if (!resolvedLocationId) {
     return NextResponse.json({ error: "Missing location" }, { status: 400 });
   }
 
-  const supabase = getSupabaseServer({ accessToken: token });
+  const supabase = token
+    ? getSupabaseServer({ accessToken: token })
+    : getSupabaseServer({ useServiceRole: true });
   const { error } = await supabase.from("psp_records").upsert(
     {
       location_id: resolvedLocationId,

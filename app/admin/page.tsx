@@ -1,7 +1,9 @@
- "use client";
+"use client";
 
+import { RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
  import { AuthPanel } from "@/components/auth-panel";
  import { ConfirmButton } from "@/components/confirm-button";
  import { useToast } from "@/components/toast";
@@ -42,6 +44,7 @@ type Location = {
   data_source?: string | null;
   length_m?: number | null;
   quality_reports_required?: number | null;
+  penetrometer_serial?: number | null;
 };
  type RecordRow = {
   location_id: string;
@@ -72,6 +75,7 @@ type CompactionReportRow = {
 
  export default function AdminPage() {
    const supabase = getSupabaseBrowser();
+  const router = useRouter();
    const { pushToast } = useToast();
    const [locations, setLocations] = useState<Location[]>([]);
    const [locationId, setLocationId] = useState("");
@@ -97,6 +101,10 @@ type CompactionReportRow = {
   const [selectedLocationEditId, setSelectedLocationEditId] = useState<
     string | null
   >(null);
+  const [penetrometerOpen, setPenetrometerOpen] = useState(false);
+  const [penetrometerInput, setPenetrometerInput] = useState("1");
+  const [editRecordOpen, setEditRecordOpen] = useState(false);
+  const [editRecordChainage, setEditRecordChainage] = useState("");
   const getAccessToken = async () => {
     const { data } = await supabase.auth.getSession();
     if (data.session?.access_token) {
@@ -117,7 +125,7 @@ type CompactionReportRow = {
       const { data, error } = await supabase
         .from("psp_locations")
         .select(
-          "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required",
+          "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
         )
         .order("name");
       if (error) {
@@ -681,53 +689,112 @@ type CompactionReportRow = {
       return;
     }
 
-  const payload = {
-    name: locationNameInput,
-    start_chainage: startValue,
-    end_chainage: endValue,
-    direction: locationDirectionInput,
-    chainage_increment: increment,
-    data_source: "psp_records",
-    length_m: length,
-    quality_reports_required: qualityReportsRequired,
-  };
+    const payload = {
+      name: locationNameInput,
+      start_chainage: startValue,
+      end_chainage: endValue,
+      direction: locationDirectionInput,
+      chainage_increment: increment,
+      data_source: "psp_records",
+      length_m: length,
+      quality_reports_required: qualityReportsRequired,
+    };
 
-  const response =
-    locationModalMode === "create"
-      ? await supabase
-          .from("psp_locations")
-          .insert(payload)
-          .select(
-            "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required",
-          )
-          .single()
-      : await supabase
-          .from("psp_locations")
-          .update(payload)
-          .eq("id", selectedLocationEditId)
-          .select(
-            "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required",
-          )
-          .maybeSingle();
+    const response =
+      locationModalMode === "create"
+        ? await supabase
+            .from("psp_locations")
+            .insert(payload)
+            .select(
+              "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
+            )
+            .single()
+        : await supabase
+            .from("psp_locations")
+            .update(payload)
+            .eq("id", selectedLocationEditId)
+            .select(
+              "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
+            )
+            .maybeSingle();
 
-  if (response.error || !response.data) {
-    pushToast({
-      type: "error",
-      title: "Location update failed",
-      message: response.error?.message ?? "No location returned.",
+    if (response.error || !response.data) {
+      pushToast({
+        type: "error",
+        title: "Location update failed",
+        message: response.error?.message ?? "No location returned.",
+      });
+      return;
+    }
+
+    const updatedLocation = response.data;
+    setLocations((prev) => {
+      const updated = prev.filter((loc) => loc.id !== updatedLocation.id);
+      return [...updated, updatedLocation].sort((a, b) =>
+        a.name.localeCompare(b.name),
+      );
     });
-    return;
-  }
-
-  const updatedLocation = response.data;
-  setLocations((prev) => {
-    const updated = prev.filter((loc) => loc.id !== updatedLocation.id);
-    return [...updated, updatedLocation].sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-  });
-  setLocationModalOpen(false);
+    setLocationModalOpen(false);
   };
+
+  const handleOpenPenetrometer = () => {
+    const current = selectedLocation?.penetrometer_serial;
+    setPenetrometerInput(String(current ?? 1));
+    setPenetrometerOpen(true);
+  };
+
+  const handleSavePenetrometer = async () => {
+    if (!locationId) return;
+    const value = Number(penetrometerInput);
+    if (!Number.isFinite(value) || value <= 0) {
+      pushToast({
+        type: "error",
+        title: "Invalid serial",
+        message: "Penetrometer serial must be a positive number.",
+      });
+      return;
+    }
+    const { error } = await supabase
+      .from("psp_locations")
+      .update({ penetrometer_serial: value })
+      .eq("id", locationId);
+    if (error) {
+      pushToast({
+        type: "error",
+        title: "Update failed",
+        message: error.message,
+      });
+      return;
+    }
+    setLocations((prev) =>
+      prev.map((loc) =>
+        loc.id === locationId ? { ...loc, penetrometer_serial: value } : loc,
+      ),
+    );
+    setPenetrometerOpen(false);
+  };
+
+  const handleOpenEditRecord = () => {
+    setEditRecordChainage("");
+    setEditRecordOpen(true);
+  };
+
+  const handleGoToEditRecord = () => {
+    if (!locationId || !editRecordChainage) return;
+    const value = Number(editRecordChainage);
+    if (!Number.isFinite(value)) {
+      pushToast({
+        type: "error",
+        title: "Invalid chainage",
+        message: "Please select a valid chainage.",
+      });
+      return;
+    }
+    setEditRecordOpen(false);
+    router.push(`/admin/record-edit?locationId=${locationId}&chainage=${value}`);
+  };
+
+  
 
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -793,6 +860,9 @@ type CompactionReportRow = {
                 >
                   Edit Location
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleOpenEditRecord} disabled={!locationId}>
+                  Edit Record
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setAuditOpen(true)}>
                   Audit
                 </DropdownMenuItem>
@@ -812,13 +882,13 @@ type CompactionReportRow = {
           </CardHeader>
           <CardContent className="space-y-3">
             {selectedLocation ? (
-                <div className="psp-card-dark">
+              <div className="psp-card-dark bg-[#757575]/70">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-[var(--text-inverse)]">
+                  <p className="text-sm font-semibold text-white">
                     {selectedLocation.name}
                   </p>
                   <div className="flex gap-2 text-xs">
-                    <Badge className="rounded-full bg-[var(--primary)] px-2 py-0.5 text-[10px] font-semibold text-white">
+                    <Badge className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-semibold text-white">
                       Ready {compactionSummary.ready}
                     </Badge>
                     <Badge className="rounded-full bg-[var(--neutral)] px-2 py-0.5 text-[10px] font-semibold text-[var(--neutral-foreground)]">
@@ -827,24 +897,27 @@ type CompactionReportRow = {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-7 px-2 text-[10px] border-0 bg-[var(--primary)] text-white shadow-[var(--shadow-fab)]"
+                      className="h-7 w-7 shrink-0 rounded-full border border-white/30 bg-[#757575] text-black hover:bg-[#757575]/90"
                       onClick={syncCompactionReports}
                       disabled={!authEmail || syncingReports}
+                      title={syncingReports ? "Syncing..." : "Sync"}
                     >
-                      {syncingReports ? "Syncing..." : "Sync"}
+                      <RefreshCw
+                        className={`size-4 ${syncingReports ? "animate-spin" : ""}`}
+                      />
                     </Button>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-[var(--text-inverse-muted)]">
+                <p className="mt-1 text-xs text-black">
                   Records: {records.length}
                 </p>
                 {locationRequirement !== null ? (
-                  <p className="mt-1 text-xs text-[var(--text-inverse-muted)]">
+                  <p className="mt-1 text-xs text-black">
                     Minimum ITR required: {locationRequirement}
                   </p>
                 ) : null}
                 {locationRequirement !== null ? (
-                  <div className="mt-2 grid gap-1 text-xs text-[var(--text-inverse-muted)]">
+                  <div className="mt-2 grid gap-1 text-xs text-black">
                     <div className="flex items-center justify-between">
                       <span>Reports ready</span>
                       <span>{compactionSummary.ready}</span>
@@ -881,7 +954,7 @@ type CompactionReportRow = {
                           <span
                             className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
                               report.status === "READY"
-                                ? "bg-[var(--primary)]"
+                                ? "bg-[#16a34a]"
                                 : "bg-[var(--neutral)]"
                             }`}
                           >
@@ -897,7 +970,11 @@ type CompactionReportRow = {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-9 px-4 text-xs border-0 bg-[var(--primary)] text-white shadow-[var(--shadow-fab)]"
+                        className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
+                          report.status === "OPEN"
+                            ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
+                            : "bg-[#16a34a]"
+                        }`}
                         onClick={() => handleSendPdf(report)}
                       >
                         Send PDF
@@ -970,6 +1047,76 @@ type CompactionReportRow = {
               onClick={handleSaveLocation}
             >
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={penetrometerOpen} onOpenChange={setPenetrometerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Penetrometer serial</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="psp-label">Serial number</label>
+            <Input
+              type="number"
+              className="psp-input"
+              value={penetrometerInput}
+              onChange={(event) => setPenetrometerInput(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPenetrometerOpen(false)}>
+              Cancel
+            </Button>
+            <Button className="psp-button psp-button-primary h-10 px-4 text-xs" onClick={handleSavePenetrometer}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editRecordOpen} onOpenChange={setEditRecordOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit record</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="psp-label">Chainage (Ch)</label>
+            <Select
+              value={editRecordChainage || undefined}
+              onValueChange={setEditRecordChainage}
+            >
+              <SelectTrigger className="psp-input">
+                <SelectValue placeholder="Select chainage" />
+              </SelectTrigger>
+              <SelectContent>
+                {[...new Set(records.map((r) => r.chainage))]
+                  .sort((a, b) => b - a)
+                  .map((ch) => (
+                    <SelectItem key={ch} value={String(ch)}>
+                      {ch}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            {records.length === 0 ? (
+              <p className="text-xs text-[var(--muted-foreground)]">
+                No records for this location.
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRecordOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="psp-button psp-button-primary h-10 px-4 text-xs"
+              onClick={handleGoToEditRecord}
+              disabled={!editRecordChainage}
+            >
+              Continue
             </Button>
           </DialogFooter>
         </DialogContent>
