@@ -14,6 +14,7 @@ export type CleanRecordInput = {
   siteInspector: string;
   layers: Record<string, number>;
   sectionId?: string | null;
+  compactorSn?: number | null;
 };
 
 const layerKeys = [
@@ -96,6 +97,14 @@ export function validateSaveData(input: Record<string, unknown>) {
   });
 
   clean.sectionId = String(input.sectionId ?? "").trim() || null;
+
+  const compactorRaw = input.compactorSn;
+  if (compactorRaw !== undefined && compactorRaw !== null && compactorRaw !== "") {
+    const num = Number(compactorRaw);
+    clean.compactorSn = Number.isFinite(num) ? num : null;
+  } else {
+    clean.compactorSn = null;
+  }
 
   if (errors.length) {
     return { ok: false as const, error: errors.join("; ") };

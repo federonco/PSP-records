@@ -43,7 +43,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
- type Location = { id: string; name: string; penetrometer_serial?: number | null };
+ type Location = {
+    id: string;
+    name: string;
+    penetrometer_serial?: number | null;
+    compactor_serial?: number | null;
+  };
  type Penetrometer = { id: string; serial_number: number; sort_order: number };
  type Section = { id: string; name: string };
 
@@ -139,7 +144,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
     const loadLocations = async () => {
       const { data, error } = await supabase
         .from("psp_locations")
-        .select("id,name,penetrometer_serial")
+        .select("id,name,penetrometer_serial,compactor_serial")
         .order("name");
       if (error) {
         pushToast({
@@ -160,15 +165,6 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
     loadLocations();
   }, [pushToast, supabase]);
 
-  useEffect(() => {
-    if (authEmail) return;
-    setChainage(0);
-    setDuplicate(false);
-    setRecordId(null);
-    setSignOffBy(null);
-    setSignOffAt(null);
-    setSignatureStrokes(null);
-  }, [authEmail]);
 
    useEffect(() => {
      if (selectedLocation) {
@@ -339,6 +335,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
          chainage,
          siteInspector,
          layers,
+         compactorSn: selectedLocation?.compactor_serial ?? selectedLocation?.penetrometer_serial ?? null,
        }),
      });
      const payload = await response.json();
@@ -417,6 +414,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
          chainage,
          siteInspector,
          layers,
+         compactorSn: selectedLocation?.compactor_serial ?? selectedLocation?.penetrometer_serial ?? null,
        }),
      });
      const payload = await response.json();

@@ -33,6 +33,7 @@ import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
       section_id: validation.clean.sectionId ?? null,
       chainage: validation.clean.chainage,
       site_inspector: validation.clean.siteInspector,
+      compactor_sn: validation.clean.compactorSn ?? null,
       ...validation.clean.layers,
     },
     { onConflict: "location_id,chainage" },

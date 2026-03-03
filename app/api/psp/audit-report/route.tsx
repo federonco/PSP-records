@@ -140,6 +140,9 @@ export async function POST(request: NextRequest) {
               <Text style={[styles.cell, styles.headerCell, { width: 34, flexGrow: 0, flexShrink: 0 }]}>
                 L3 750
               </Text>
+              <Text style={[styles.cell, styles.headerCell, { width: 46, flexGrow: 0, flexShrink: 0 }]}>
+                Compactor SN
+              </Text>
               <Text style={[styles.cell, styles.headerCell, { width: 60, flexGrow: 0, flexShrink: 0 }]}>
                 Inspector
               </Text>
@@ -187,6 +190,9 @@ export async function POST(request: NextRequest) {
                 </Text>
                 <Text style={[styles.cell, { width: 34, flexGrow: 0, flexShrink: 0 }]}>
                   {record.l3_750 ?? ""}
+                </Text>
+                <Text style={[styles.cell, { width: 46, flexGrow: 0, flexShrink: 0 }]}>
+                  {record.compactor_sn ?? "—"}
                 </Text>
                 <Text style={[styles.cell, { width: 60, flexGrow: 0, flexShrink: 0 }]}>
                   {record.site_inspector ?? ""}

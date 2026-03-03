@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     siteInspector,
     layers,
     sectionId,
+    compactorSn,
   } = body;
 
   if (!locationId || !siteInspector || Number.isNaN(Number(chainage))) {
@@ -66,12 +67,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Record not found" }, { status: 404 });
   }
 
+  const compactorSnValue =
+    compactorSn !== undefined && compactorSn !== null && compactorSn !== ""
+      ? Number(compactorSn)
+      : null;
+
   const { error } = await supabase
     .from("psp_records")
     .update({
       location_name: locationName ?? null,
       section_id: sectionId ?? null,
       site_inspector: siteInspector,
+      compactor_sn: Number.isFinite(compactorSnValue) ? compactorSnValue : null,
       ...layerPayload,
     })
     .eq("id", existing.id);
