@@ -42,6 +42,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 
  type Location = {
     id: string;
@@ -80,6 +81,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
    const [sectionId, setSectionId] = useState("");
   const [chainage, setChainage] = useState<number>(0);
   const [chainageDisplay, setChainageDisplay] = useState("0.00");
+  const [chainageLoading, setChainageLoading] = useState(false);
    const [checking, setChecking] = useState(false);
    const [duplicate, setDuplicate] = useState(false);
    const [recordId, setRecordId] = useState<string | null>(null);
@@ -222,26 +224,34 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
   }, [locationId, pushToast, supabase]);
 
   useEffect(() => {
-    if (!locationId) return;
-     const updateSuggestion = async () => {
-      const token = await getAccessToken();
-    const response = await fetch(
-      `/api/psp/next-chainage?locationId=${locationId}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      },
-    );
-       const payload = await response.json();
-       if (!response.ok) {
-         pushToast({
-           type: "error",
-           title: "Failed to get next chainage",
-           message: payload.error ?? "Unknown error",
-         });
-         return;
-       }
-       setChainage(payload.chainage);
-     };
+    if (!locationId) {
+      setChainageLoading(false);
+      return;
+    }
+    setChainageLoading(true);
+    const updateSuggestion = async () => {
+      try {
+        const token = await getAccessToken();
+        const response = await fetch(
+          `/api/psp/next-chainage?locationId=${locationId}`,
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+          },
+        );
+        const payload = await response.json();
+        if (!response.ok) {
+          pushToast({
+            type: "error",
+            title: "Failed to get next chainage",
+            message: payload.error ?? "Unknown error",
+          });
+          return;
+        }
+        setChainage(payload.chainage);
+      } finally {
+        setChainageLoading(false);
+      }
+    };
     updateSuggestion();
   }, [locationId, pushToast, supabase]);
 
@@ -487,7 +497,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             </div>
             <Button
               variant="ghost"
-              className="psp-button psp-button-ghost h-7 px-3 text-xs text-[var(--text-secondary)]"
+              className="psp-button psp-button-ghost shrink-0 h-8 min-h-8 px-3 text-xs text-[var(--text-secondary)]"
               onClick={() => {
                 if (authEmail) {
                   router.push("/admin");
@@ -510,7 +520,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               value={locationSelectValue}
               onValueChange={(value) => setLocationId(value)}
             >
-              <SelectTrigger className="psp-input -mt-[5px] w-[320px]">
+              <SelectTrigger className="psp-input -mt-[5px] w-full max-w-[320px]">
                 <SelectValue placeholder="Select location" />
               </SelectTrigger>
               <SelectContent className="w-[360px] -mt-[2px] p-0">
@@ -535,25 +545,33 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               <Button
                 variant="outline"
                 size="icon"
-                className="h-[42px] w-[42px] rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90"
+                className="size-10 shrink-0 min-w-10 min-h-10 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90 md:size-12 md:min-w-12 md:min-h-12"
                 onClick={() =>
                   handleAdjustChainage(-CHAINAGE_STEP)
                 }
               >
                 -
               </Button>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={chainageDisplay}
-                onChange={(event) => handleChainageChange(event.target.value)}
-                onBlur={handleChainageBlur}
-                className="psp-mono psp-hero h-14 w-full max-w-[224px] bg-[var(--surface-alt)] text-center text-[var(--ink)]"
-              />
+              <div className="relative h-14 w-full min-w-0 max-w-[224px] shrink">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={chainageDisplay}
+                  onChange={(event) => handleChainageChange(event.target.value)}
+                  onBlur={handleChainageBlur}
+                  disabled={chainageLoading}
+                  className="psp-mono psp-hero h-14 w-full bg-[var(--surface-alt)] text-center text-[var(--ink)] pr-10"
+                />
+                {chainageLoading ? (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--ink)]/70">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </span>
+                ) : null}
+              </div>
               <Button
                 variant="outline"
                 size="icon"
-                className="h-[42px] w-[42px] rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90"
+                className="size-10 shrink-0 min-w-10 min-h-10 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90 md:size-12 md:min-w-12 md:min-h-12"
                 onClick={() =>
                   handleAdjustChainage(CHAINAGE_STEP)
                 }
@@ -649,8 +667,8 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="h-7 w-7 px-0 text-[var(--muted-foreground)]"
+                    size="icon"
+                    className="size-8 shrink-0 text-[var(--muted-foreground)]"
                   >
                     ⋮
                   </Button>
@@ -697,14 +715,14 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                     <span>Layer {layerIndex + 1}</span>
                     <span>Number of blows</span>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
                     {layerFields.slice(layerIndex * 3, layerIndex * 3 + 3).map(
                       (field) => {
                         const value = layers[field.key];
                         const warning = layerOutOfRange(value);
                         return (
-                          <div key={field.key} className="space-y-1">
-                            <label className="psp-label">{field.label}</label>
+                          <div key={field.key} className="grid min-w-0 content-start gap-1">
+                            <label className="psp-label truncate">{field.label}</label>
                             <Input
                               type="number"
                               min={0}
@@ -713,7 +731,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                               onChange={(event) =>
                                 updateLayerValue(field.key, event.target.value)
                               }
-                              className={`psp-input ${warning ? "border-[var(--danger)] bg-[color:var(--danger)/0.08]" : ""}`}
+                              className={`psp-layer-input ${warning ? "border border-[var(--danger)] bg-[color:var(--danger)/0.08]" : ""}`}
                             />
                             {warning ? (
                               <p className="text-xs text-[var(--danger)]">
@@ -757,7 +775,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 <Button
                   type="button"
                   size="sm"
-                  className="psp-button h-9 px-3 text-xs bg-[#2F966A] text-white hover:bg-[#2F966A]/90"
+                  className="psp-button shrink-0 h-9 min-h-9 px-4 text-xs bg-[#2F966A] text-white hover:bg-[#2F966A]/90"
                   onClick={() => setSignatureOpen(true)}
                   disabled={!siteInspector}
                 >
@@ -788,7 +806,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               confirmLabel="CONFIRM?"
               onConfirm={handleLodge}
               disabled={!canSubmit || loading || duplicate}
-              className="psp-button w-full bg-[#51B58B] text-white hover:bg-[#51B58B]/90"
+              className="psp-button w-full shrink-0 min-h-11 bg-[#51B58B] text-white hover:bg-[#51B58B]/90"
               confirmClassName="psp-button-warning"
             />
           </CardContent>
@@ -796,7 +814,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             <CardFooter className="pt-3">
               <Button
                 variant="destructive"
-                className="w-full"
+                className="w-full shrink-0 min-h-11"
                 onClick={() => setOverwriteOpen(true)}
                 disabled={!canSubmit}
               >

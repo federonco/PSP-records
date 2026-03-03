@@ -1,0 +1,41 @@
+---
+description: Mobile responsiveness and visual consistency rules for all UI
+globs: **/*.tsx,**/*.jsx,**/*.css
+alwaysApply: false
+---
+
+# UI Responsiveness & Visual Consistency
+
+Before writing or modifying ANY UI code, ensure full mobile responsiveness and visual consistency across all screen sizes. Follow these rules strictly.
+
+## Layout & Structure
+- Use flexbox or CSS Grid for all layouts — never fixed widths in px for containers
+- All containers must use: `width: 100%`, `max-width`, and horizontal padding (`px-4` minimum)
+- Stack elements vertically on mobile (`flex-col`), side by side on desktop (`sm:flex-row` or `md:flex-row`)
+- Never let content overflow horizontally — test mentally at 375px width (iPhone SE)
+
+## Spacing & Symmetry
+- Use consistent spacing scale (Tailwind: 2, 4, 6, 8, 12, 16) — never arbitrary values
+- Padding and margins must be symmetric: if left has `p-4`, right has `p-4`
+- Gap between elements must be uniform within the same section
+- Sections must have equal vertical breathing room (`py-8 md:py-16`)
+
+## Typography
+- Font sizes must scale: `text-sm` on mobile → `text-base` on desktop
+- Never use fixed font sizes that break on small screens
+- Line height and letter spacing must remain readable at all sizes
+- Headings: `text-xl sm:text-2xl md:text-3xl` (always responsive)
+
+## Components
+- Buttons: full width on mobile (`w-full`), auto width on desktop (`sm:w-auto`)
+- Cards: full width on mobile, grid layout on desktop (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`)
+- Forms: stack labels and inputs vertically; use `space-y-4` for consistent gaps
+- Images: always `max-w-full h-auto` to prevent overflow
+
+## Breakpoints (Tailwind)
+- `sm`: 640px
+- `md`: 768px
+- `lg`: 1024px
+- `xl`: 1280px
+
+Test at: 375px (mobile), 768px (tablet), 1024px+ (desktop).
