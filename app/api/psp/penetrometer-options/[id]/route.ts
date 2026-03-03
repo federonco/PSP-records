@@ -8,37 +8,40 @@ export async function PATCH(
 ) {
   const { token } = await getUserFromRequest(request);
   const { id } = await params;
-
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
   const body = await request.json();
-  const { penetrometerSn } = body;
-
-  if (penetrometerSn == null) {
+  const { serialText } = body;
+  if (!serialText || typeof serialText !== "string") {
     return NextResponse.json(
-      { error: "Missing penetrometerSn" },
+      { error: "Missing serialText" },
       { status: 400 },
     );
   }
 
-  const sn = String(penetrometerSn).trim();
+  const text = String(serialText).trim();
+  if (!text) {
+    return NextResponse.json(
+      { error: "serialText cannot be empty" },
+      { status: 400 },
+    );
+  }
 
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
 
   const { data, error } = await supabase
-    .from("psp_locations")
-    .update({ penetrometer_sn: sn || null })
+    .from("psp_penetrometer_options")
+    .update({ serial_text: text })
     .eq("id", id)
-    .select("id,penetrometer_sn")
+    .select("id,serial_text,sort_order")
     .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  return NextResponse.json({ location: data });
+  return NextResponse.json({ option: data });
 }

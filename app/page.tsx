@@ -28,13 +28,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
- import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -48,10 +48,11 @@ import { Loader2 } from "lucide-react";
     id: string;
     name: string;
     penetrometer_serial?: number | null;
+    penetrometer_sn?: string | null;
     compactor_serial?: number | null;
   };
- type Penetrometer = { id: string; serial_number: number; sort_order: number };
  type Section = { id: string; name: string };
+ type PenetrometerOption = { id: string; serial_text: string; sort_order: number };
 
  const layerFields = [
    { key: "l1_150", label: "150-450mm" },
@@ -97,15 +98,15 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
      >,
    );
    const [loading, setLoading] = useState(false);
+  const [penetrometerOptions, setPenetrometerOptions] = useState<PenetrometerOption[]>([]);
+  const [penetrometerAddOpen, setPenetrometerAddOpen] = useState(false);
+  const [penetrometerEditOpen, setPenetrometerEditOpen] = useState(false);
+  const [penetrometerAddInput, setPenetrometerAddInput] = useState("#3059-0325");
+  const [penetrometerEditId, setPenetrometerEditId] = useState<string | null>(null);
+  const [penetrometerEditInput, setPenetrometerEditInput] = useState("#3059-0325");
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
-  const [penetrometers, setPenetrometers] = useState<Penetrometer[]>([]);
-  const [penetrometerAddOpen, setPenetrometerAddOpen] = useState(false);
-  const [penetrometerEditOpen, setPenetrometerEditOpen] = useState(false);
-  const [penetrometerAddInput, setPenetrometerAddInput] = useState("1");
-  const [penetrometerEditId, setPenetrometerEditId] = useState<string | null>(null);
-  const [penetrometerEditInput, setPenetrometerEditInput] = useState("1");
 
   const getAccessToken = async () => {
     const { data } = await supabase.auth.getSession();
@@ -146,7 +147,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
     const loadLocations = async () => {
       const { data, error } = await supabase
         .from("psp_locations")
-        .select("id,name,penetrometer_serial,compactor_serial")
+        .select("id,name,penetrometer_serial,penetrometer_sn,compactor_serial")
         .order("name");
       if (error) {
         pushToast({
@@ -176,22 +177,22 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
 
   useEffect(() => {
     if (!locationId) return;
-    const loadPenetrometers = async () => {
+    const loadOptions = async () => {
       const token = await getAccessToken();
       const response = await fetch(
-        `/api/psp/penetrometers?locationId=${locationId}`,
+        `/api/psp/penetrometer-options?locationId=${locationId}`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         },
       );
       const payload = await response.json();
-      if (response.ok && Array.isArray(payload.penetrometers)) {
-        setPenetrometers(payload.penetrometers);
+      if (response.ok && Array.isArray(payload.options)) {
+        setPenetrometerOptions(payload.options);
       } else {
-        setPenetrometers([]);
+        setPenetrometerOptions([]);
       }
     };
-    loadPenetrometers();
+    loadOptions();
   }, [locationId]);
 
   useEffect(() => {
@@ -345,7 +346,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
          chainage,
          siteInspector,
          layers,
-         compactorSn: selectedLocation?.compactor_serial ?? selectedLocation?.penetrometer_serial ?? null,
+         compactorSn: selectedLocation?.compactor_serial != null ? String(selectedLocation.compactor_serial) : (selectedLocation?.penetrometer_sn ?? "#3059-0325"),
        }),
      });
      const payload = await response.json();
@@ -424,7 +425,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
          chainage,
          siteInspector,
          layers,
-         compactorSn: selectedLocation?.compactor_serial ?? selectedLocation?.penetrometer_serial ?? null,
+         compactorSn: selectedLocation?.compactor_serial != null ? String(selectedLocation.compactor_serial) : (selectedLocation?.penetrometer_sn ?? "#3059-0325"),
        }),
      });
      const payload = await response.json();
@@ -607,10 +608,14 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
               <span className="font-semibold">Penetrometer S/N:</span>
               <Select
-                value={String(selectedLocation?.penetrometer_serial ?? 1)}
+                value={
+                  selectedLocation?.penetrometer_sn ??
+                  (selectedLocation?.penetrometer_serial != null
+                    ? String(selectedLocation.penetrometer_serial)
+                    : "#3059-0325")
+                }
                 onValueChange={async (value) => {
-                  const sn = Number(value);
-                  if (!locationId || !Number.isInteger(sn)) return;
+                  if (!locationId) return;
                   const token = await getAccessToken();
                   const res = await fetch(`/api/psp/locations/${locationId}`, {
                     method: "PATCH",
@@ -618,13 +623,13 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                       "Content-Type": "application/json",
                       ...(token ? { Authorization: `Bearer ${token}` } : {}),
                     },
-                    body: JSON.stringify({ penetrometerSerial: sn }),
+                    body: JSON.stringify({ penetrometerSn: value }),
                   });
                   if (res.ok) {
                     setLocations((prev) =>
                       prev.map((loc) =>
                         loc.id === locationId
-                          ? { ...loc, penetrometer_serial: sn }
+                          ? { ...loc, penetrometer_sn: value }
                           : loc,
                       ),
                     );
@@ -638,27 +643,20 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                   }
                 }}
               >
-                <SelectTrigger className="h-8 w-[72px] border-0 bg-transparent px-1 py-0 text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
-                  <SelectValue />
+                <SelectTrigger className="h-8 w-[140px] border-0 bg-transparent px-1 py-0 text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
+                  <SelectValue placeholder="#3059-0325" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(penetrometers.length
-                    ? penetrometers
-                    : [
-                        {
-                          id: "fallback",
-                          serial_number:
-                            selectedLocation?.penetrometer_serial ?? 1,
-                          sort_order: 0,
-                        },
-                      ]
-                  ).map((p) => (
+                  {(penetrometerOptions.length
+                    ? penetrometerOptions
+                    : [{ id: "default", serial_text: "#3059-0325", sort_order: 0 }]
+                  ).map((o) => (
                     <SelectItem
-                      key={p.id}
-                      value={String(p.serial_number)}
+                      key={o.id}
+                      value={o.serial_text}
                       className="text-xs"
                     >
-                      {p.serial_number}
+                      {o.serial_text}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -680,13 +678,16 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                   <DropdownMenuItem
                     onClick={() => {
                       const current =
-                        selectedLocation?.penetrometer_serial ?? 1;
-                      const p = penetrometers.find(
-                        (x) => x.serial_number === current,
+                        selectedLocation?.penetrometer_sn ??
+                        (selectedLocation?.penetrometer_serial != null
+                          ? String(selectedLocation.penetrometer_serial)
+                          : "#3059-0325");
+                      const p = penetrometerOptions.find(
+                        (x) => x.serial_text === current,
                       );
-                      if (p && p.id !== "fallback") {
+                      if (p && p.id !== "default") {
                         setPenetrometerEditId(p.id);
-                        setPenetrometerEditInput(String(p.serial_number));
+                        setPenetrometerEditInput(p.serial_text);
                         setPenetrometerEditOpen(true);
                       } else {
                         pushToast({
@@ -878,7 +879,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
         open={penetrometerAddOpen}
         onOpenChange={(open) => {
           setPenetrometerAddOpen(open);
-          if (!open) setPenetrometerAddInput("1");
+          if (!open) setPenetrometerAddInput("#3059-0325");
         }}
       >
         <DialogContent>
@@ -888,10 +889,10 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           <div className="space-y-2">
             <label className="psp-label">Serial number</label>
             <Input
-              type="number"
-              min={1}
+              type="text"
               value={penetrometerAddInput}
               onChange={(e) => setPenetrometerAddInput(e.target.value)}
+              placeholder="#3059-0325"
               className="psp-input"
             />
           </div>
@@ -904,35 +905,35 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             </Button>
             <Button
               onClick={async () => {
-                const sn = Number(penetrometerAddInput);
-                if (!locationId || !Number.isInteger(sn) || sn < 1) {
+                const text = penetrometerAddInput.trim();
+                if (!locationId || !text) {
                   pushToast({
                     type: "error",
                     title: "Invalid serial number",
-                    message: "Enter a positive integer.",
+                    message: "Enter a value (e.g. #3059-0325).",
                   });
                   return;
                 }
                 const token = await getAccessToken();
-                const res = await fetch("/api/psp/penetrometers", {
+                const res = await fetch("/api/psp/penetrometer-options", {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                   },
-                  body: JSON.stringify({ locationId, serialNumber: sn }),
+                  body: JSON.stringify({ locationId, serialText: text }),
                 });
                 const payload = await res.json();
                 if (res.ok) {
-                  setPenetrometers((prev) =>
-                    [...prev, payload.penetrometer].sort(
+                  setPenetrometerOptions((prev) =>
+                    [...prev, payload.option].sort(
                       (a, b) => a.sort_order - b.sort_order,
                     ),
                   );
                   setLocations((prev) =>
                     prev.map((loc) =>
                       loc.id === locationId
-                        ? { ...loc, penetrometer_serial: sn }
+                        ? { ...loc, penetrometer_sn: text }
                         : loc,
                     ),
                   );
@@ -959,7 +960,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           setPenetrometerEditOpen(open);
           if (!open) {
             setPenetrometerEditId(null);
-            setPenetrometerEditInput("1");
+            setPenetrometerEditInput("#3059-0325");
           }
         }}
       >
@@ -970,10 +971,10 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           <div className="space-y-2">
             <label className="psp-label">Serial number</label>
             <Input
-              type="number"
-              min={1}
+              type="text"
               value={penetrometerEditInput}
               onChange={(e) => setPenetrometerEditInput(e.target.value)}
+              placeholder="#3059-0325"
               className="psp-input"
             />
           </div>
@@ -987,41 +988,40 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             <Button
               onClick={async () => {
                 if (!penetrometerEditId) return;
-                const sn = Number(penetrometerEditInput);
-                if (!Number.isInteger(sn) || sn < 1) {
+                const text = penetrometerEditInput.trim();
+                if (!text) {
                   pushToast({
                     type: "error",
                     title: "Invalid serial number",
-                    message: "Enter a positive integer.",
+                    message: "Enter a value (e.g. #3059-0325).",
                   });
                   return;
                 }
                 const token = await getAccessToken();
                 const res = await fetch(
-                  `/api/psp/penetrometers/${penetrometerEditId}`,
+                  `/api/psp/penetrometer-options/${penetrometerEditId}`,
                   {
                     method: "PATCH",
                     headers: {
                       "Content-Type": "application/json",
                       ...(token ? { Authorization: `Bearer ${token}` } : {}),
                     },
-                    body: JSON.stringify({ serialNumber: sn }),
+                    body: JSON.stringify({ serialText: text }),
                   },
                 );
                 const payload = await res.json();
                 if (res.ok) {
-                  const editedPen = penetrometers.find(
-                    (p) => p.id === penetrometerEditId,
-                  );
+                  const current =
+                    selectedLocation?.penetrometer_sn ?? "#3059-0325";
                   const wasSelected =
-                    editedPen &&
-                    selectedLocation?.penetrometer_serial ===
-                      editedPen.serial_number;
-                  setPenetrometers((prev) =>
+                    penetrometerOptions.find(
+                      (p) => p.id === penetrometerEditId,
+                    )?.serial_text === current;
+                  setPenetrometerOptions((prev) =>
                     prev
                       .map((p) =>
                         p.id === penetrometerEditId
-                          ? { ...p, serial_number: sn }
+                          ? { ...p, serial_text: text }
                           : p,
                       )
                       .sort((a, b) => a.sort_order - b.sort_order),
@@ -1030,7 +1030,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                     setLocations((prev) =>
                       prev.map((loc) =>
                         loc.id === locationId
-                          ? { ...loc, penetrometer_serial: sn }
+                          ? { ...loc, penetrometer_sn: text }
                           : loc,
                       ),
                     );

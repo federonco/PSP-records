@@ -92,6 +92,8 @@ alter table public.psp_locations
   add column if not exists penetrometer_serial integer not null default 1;
 alter table public.psp_locations
   add column if not exists compactor_serial integer null;
+alter table public.psp_locations
+  add column if not exists penetrometer_sn text null;
 
 alter table public.psp_records
   add column if not exists sign_off_by text null;
@@ -101,6 +103,8 @@ alter table public.psp_records
   add column if not exists signature_strokes jsonb null;
 alter table public.psp_records
   add column if not exists compactor_sn integer null;
+alter table public.psp_records
+  alter column compactor_sn type text using compactor_sn::text;
 
 -- RLS
 alter table psp_locations enable row level security;
