@@ -54,6 +54,7 @@ function buildMarkerMap(payload: {
   reportNum: number;
   workLocation: string;
   supervisorName: string;
+  penetrometerSn: string;
   records: ReportRecord[];
 }) {
   const markers: Record<string, string> = {
@@ -61,6 +62,7 @@ function buildMarkerMap(payload: {
     REPORT_NUMBER: String(payload.reportNum),
     WORK_LOCATION: payload.workLocation,
     SUPERVISOR_NAME: payload.supervisorName,
+    PENETROMETER_SN: payload.penetrometerSn,
   };
 
   const padded = Array.from({ length: 10 }, (_, idx) => payload.records[idx] ?? {});
@@ -86,28 +88,42 @@ async function resolveLocation(locationId: string | null, locationName: string |
   const supabase = getSupabaseServer({ useServiceRole: true });
   let resolvedLocationId = locationId ?? "";
   let resolvedLocationName = locationName ?? "";
+  let penetrometerSn = "#3059-0325";
 
   if (!resolvedLocationId && locationName) {
     const { data: locationRow, error } = await supabase
       .from("psp_locations")
-      .select("id,name")
+      .select("id,name,penetrometer_sn")
       .eq("name", locationName)
       .maybeSingle();
     if (error || !locationRow) return null;
     resolvedLocationId = locationRow.id;
     resolvedLocationName = locationRow.name;
+    penetrometerSn = locationRow.penetrometer_sn ?? "#3059-0325";
   }
 
   if (resolvedLocationId && !resolvedLocationName) {
     const { data: locationRow } = await supabase
       .from("psp_locations")
-      .select("name")
+      .select("name,penetrometer_sn")
       .eq("id", resolvedLocationId)
       .maybeSingle();
     resolvedLocationName = locationRow?.name ?? resolvedLocationId;
+    penetrometerSn = locationRow?.penetrometer_sn ?? "#3059-0325";
+  } else if (resolvedLocationId) {
+    const { data: locationRow } = await supabase
+      .from("psp_locations")
+      .select("penetrometer_sn")
+      .eq("id", resolvedLocationId)
+      .maybeSingle();
+    penetrometerSn = locationRow?.penetrometer_sn ?? "#3059-0325";
   }
 
-  return { locationId: resolvedLocationId, locationName: resolvedLocationName };
+  return {
+    locationId: resolvedLocationId,
+    locationName: resolvedLocationName,
+    penetrometerSn,
+  };
 }
 
 async function getEmailFromToken(request: NextRequest) {
@@ -137,6 +153,7 @@ function getDefaultRecipient() {
 async function generatePdfFromTemplate(params: {
   locationId: string;
   locationName: string;
+  penetrometerSn: string;
   reportNum: number;
   includeOpen: boolean;
 }) {
@@ -147,7 +164,7 @@ async function generatePdfFromTemplate(params: {
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { locationId, locationName, reportNum, includeOpen } = params;
+  const { locationId, locationName, penetrometerSn, reportNum, includeOpen } = params;
 
   const { data: chainageRows, error: chainageError } = await supabase
     .from("psp_records")
@@ -212,6 +229,7 @@ async function generatePdfFromTemplate(params: {
     reportNum,
     workLocation: locationName,
     supervisorName,
+    penetrometerSn,
     records: recordsPayload,
   });
 
@@ -315,6 +333,7 @@ export async function POST(request: NextRequest) {
     const { buffer, block } = await generatePdfFromTemplate({
       locationId: resolved.locationId,
       locationName: resolved.locationName,
+      penetrometerSn: resolved.penetrometerSn,
       reportNum,
       includeOpen,
     });

@@ -39,6 +39,7 @@ export async function generateCompactionPdf(data: CompactionTemplateData) {
           <Text>Location: {data.WORK_LOCATION ?? ""}</Text>
           <Text>Supervisor: {data.SUPERVISOR_NAME ?? ""}</Text>
           <Text>Date: {data.REPORT_DATE ?? ""}</Text>
+          <Text>Penetrometer S/N: {data.PENETROMETER_SN ?? "#3059-0325"}</Text>
         </View>
         <View style={styles.table}>
           <View style={styles.headerRow}>

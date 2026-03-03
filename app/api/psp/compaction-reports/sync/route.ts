@@ -89,14 +89,13 @@ export async function POST(request: NextRequest) {
 
   const supabase = getSupabaseServer({ useServiceRole: true });
 
-  const { data: locationRow } = locationName
-    ? { data: null }
-    : await supabase
-        .from("psp_locations")
-        .select("name")
-        .eq("id", locationId)
-        .maybeSingle();
+  const { data: locationRow } = await supabase
+    .from("psp_locations")
+    .select("name,penetrometer_sn")
+    .eq("id", locationId)
+    .maybeSingle();
 
+  const penetrometerSn = locationRow?.penetrometer_sn ?? "#3059-0325";
   const resolvedLocationName =
     locationName ?? locationRow?.name ?? locationId;
 
@@ -223,6 +222,7 @@ export async function POST(request: NextRequest) {
         REPORT_DATE: reportDate,
         SUPERVISOR_NAME: supervisorName,
         WORK_LOCATION: resolvedLocationName,
+        PENETROMETER_SN: penetrometerSn,
         records: templateRecords,
       };
       const result = await generateCompactionPdf(templateData);

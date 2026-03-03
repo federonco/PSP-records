@@ -80,10 +80,16 @@ export async function POST(request: NextRequest) {
       year: "numeric",
     });
     const reportDate = formatter.format(new Date());
+    const { data: loc } = await supabase
+      .from("psp_locations")
+      .select("name,penetrometer_sn")
+      .eq("id", report.location_id)
+      .maybeSingle();
     const templateData: CompactionTemplateData = {
       REPORT_DATE: reportDate,
       SUPERVISOR_NAME: records?.[0]?.site_inspector ?? "",
-      WORK_LOCATION: report.location_id,
+      WORK_LOCATION: loc?.name ?? report.location_id,
+      PENETROMETER_SN: loc?.penetrometer_sn ?? "#3059-0325",
       records: (records ?? []).map((record) => ({
         date: formatter.format(new Date(record.recorded_at)),
         ch: record.chainage,

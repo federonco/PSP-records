@@ -35,6 +35,11 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = getSupabaseServer({ useServiceRole: true });
+    const { data: loc } = await supabase
+      .from("psp_locations")
+      .select("penetrometer_sn")
+      .eq("id", locationId)
+      .maybeSingle();
     const { data: records, error } = await supabase
       .from("psp_records")
       .select(
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
       REPORT_DATE: reportDate,
       SUPERVISOR_NAME: supervisorName,
       WORK_LOCATION: locationName ?? locationId,
+      PENETROMETER_SN: loc?.penetrometer_sn ?? "#3059-0325",
       records: (records ?? []).map((record) => ({
         date: formatter.format(new Date(record.recorded_at)),
         ch: record.chainage,
