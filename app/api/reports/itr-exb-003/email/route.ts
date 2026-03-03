@@ -138,18 +138,6 @@ async function getEmailFromToken(request: NextRequest) {
   return data.user?.email ?? null;
 }
 
-function getDefaultRecipient() {
-  const allowlist = process.env.ADMIN_EMAIL_ALLOWLIST;
-  const recipients = allowlist
-    ?.split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  if (recipients && recipients.length > 0) {
-    return recipients.join(", ");
-  }
-  return process.env.SMTP_USER || "";
-}
-
 async function generatePdfFromTemplate(params: {
   locationId: string;
   locationName: string;
@@ -292,8 +280,6 @@ export async function POST(request: NextRequest) {
   const includeOpen = Boolean(body.includeOpen);
   const locationId = (body.location_id ?? body.locationId ?? null) as string | null;
   const locationName = (body.location_name ?? body.locationName ?? null) as string | null;
-  const toEmail = (body.toEmail ?? null) as string | null;
-
   if (Number.isNaN(reportNum)) {
     return NextResponse.json({ error: "Missing reportNum" }, { status: 400 });
   }
@@ -338,10 +324,7 @@ export async function POST(request: NextRequest) {
       includeOpen,
     });
     const safeLocation = resolved.locationName.replace(/\s+/g, "-");
-    const recipient = toEmail || getDefaultRecipient();
-    if (!recipient) {
-      return NextResponse.json({ error: "Missing email recipient" }, { status: 400 });
-    }
+    const recipient = adminEmail;
 
     const pending = block.status === "OPEN" ? block.pending.join(", ") : "";
     const transporter = nodemailer.createTransport({

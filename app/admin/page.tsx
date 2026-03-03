@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -86,6 +86,7 @@ type CompactionReportRow = {
     CompactionReportRow[]
   >([]);
   const [syncingReports, setSyncingReports] = useState(false);
+  const [sendingReportId, setSendingReportId] = useState<string | null>(null);
    const [authEmail, setAuthEmail] = useState<string | null>(null);
    const [loading, setLoading] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -373,7 +374,9 @@ type CompactionReportRow = {
       });
       return;
     }
-    const response = await fetch("/api/reports/itr-exb-003/email", {
+    setSendingReportId(report.id);
+    try {
+      const response = await fetch("/api/reports/itr-exb-003/email", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -386,20 +389,23 @@ type CompactionReportRow = {
         includeOpen: true,
       }),
     });
-    const payload = await response.json();
-    if (!response.ok) {
+      const payload = await response.json();
+      if (!response.ok) {
+        pushToast({
+          type: "error",
+          title: "Send failed",
+          message: payload.error ?? "Unable to send report.",
+        });
+        return;
+      }
       pushToast({
-        type: "error",
-        title: "Send failed",
-        message: payload.error ?? "Unable to send report.",
+        type: "success",
+        title: "Report sent",
+        message: "The PDF was emailed to the admin account.",
       });
-      return;
+    } finally {
+      setSendingReportId(null);
     }
-    pushToast({
-      type: "success",
-      title: "Report sent",
-      message: "The PDF was emailed to the admin account.",
-    });
   };
 
   const handleAuditReportAll = async () => {
@@ -890,7 +896,7 @@ type CompactionReportRow = {
                     <Badge className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-semibold text-white">
                       Ready {compactionSummary.ready}
                     </Badge>
-                    <Badge className="rounded-full bg-[var(--neutral)] px-2 py-0.5 text-[10px] font-semibold text-[var(--neutral-foreground)]">
+                    <Badge className="rounded-full bg-[#f59e0b] px-2 py-0.5 text-[10px] font-semibold text-white shadow-[0_4px_14px_rgba(245,158,11,0.35)]">
                       Open {compactionSummary.open}
                     </Badge>
                     <Button
@@ -959,7 +965,7 @@ type CompactionReportRow = {
                             className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
                               report.status === "READY"
                                 ? "bg-[#16a34a]"
-                                : "bg-[var(--neutral)]"
+                                : "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
                             }`}
                           >
                             {report.status === "READY" ? "READY" : "OPEN"}
@@ -988,14 +994,22 @@ type CompactionReportRow = {
                       <Button
                         variant="outline"
                         size="sm"
-                        className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
+                        disabled={sendingReportId !== null}
+                        className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] disabled:opacity-80 ${
                           report.status === "OPEN"
                             ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
                             : "bg-[#16a34a]"
                         }`}
                         onClick={() => handleSendPdf(report)}
                       >
-                        Send PDF
+                        {sendingReportId === report.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                            Sending…
+                          </>
+                        ) : (
+                          "Send PDF"
+                        )}
                       </Button>
                     </div>
                   );
@@ -1175,7 +1189,14 @@ type CompactionReportRow = {
               onClick={handleAuditReportAll}
               disabled={!selectedLocation || loading}
             >
-              Send PDF
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  Sending…
+                </>
+              ) : (
+                "Send PDF"
+              )}
             </Button>
             <Button variant="outline" onClick={() => setAuditOpen(false)}>
               Close
