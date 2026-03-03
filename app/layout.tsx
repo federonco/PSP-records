@@ -48,7 +48,7 @@ export default function RootLayout({
             <div className="flex-1">{children}</div>
             <footer className="px-6 pb-6 pt-2 text-center text-xs text-[var(--muted-foreground)]">
               <div>
-                AppName - Version - Created By{" "}
+                Onsite(B) - V-71 - Created By{" "}
               <a
                 href="https://www.readx.com.au"
                 target="_blank"
@@ -63,7 +63,7 @@ export default function RootLayout({
                 <sup className="text-[8px]">TM</sup>
               </a>{" "}
               </div>
-              <div>All Rights Reserved</div>
+              <div> - All Rights Reserved - </div>
             </footer>
           </div>
         </Providers>

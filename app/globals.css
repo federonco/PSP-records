@@ -227,6 +227,11 @@ body {
   --foreground: var(--ink);
 }
 
+nextjs-portal {
+  left: unset;
+  top: unset;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
