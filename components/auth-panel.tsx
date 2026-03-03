@@ -82,14 +82,14 @@
          Sign in
        </p>
        <Input
-         className="psp-input h-9 text-xs"
+         className="psp-input h-9 text-[16px] md:text-xs"
          value={email}
          onChange={(event) => setEmail(event.target.value)}
          placeholder="Email"
          type="email"
        />
        <Input
-         className="psp-input h-9 text-xs"
+         className="psp-input h-9 text-[16px] md:text-xs"
          value={password}
          onChange={(event) => setPassword(event.target.value)}
          placeholder="Password"

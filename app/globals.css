@@ -107,6 +107,9 @@
   --radius-4xl: calc(var(--radius) + 16px);
 }
 
+html {
+  touch-action: manipulation;
+}
 body {
   background: var(--bg);
   color: var(--ink);
@@ -139,7 +142,12 @@ body {
   }
 
   .psp-input {
-    @apply h-11 w-full rounded-[12px] border-0 bg-[var(--surface-alt)] px-4 text-sm text-[var(--ink)] outline-none transition duration-[250ms] ease-[ease] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[color:var(--primary)/0.25];
+    @apply h-11 w-full rounded-[12px] border-0 bg-[var(--surface-alt)] px-4 text-[16px] text-[var(--ink)] outline-none transition duration-[250ms] ease-[ease] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[color:var(--primary)/0.25];
+  }
+  @media (min-width: 768px) {
+    .psp-input {
+      font-size: 0.875rem;
+    }
   }
 
   input.psp-layer-input {
@@ -151,7 +159,7 @@ body {
     border: 0;
     padding: 0.5rem 0.75rem;
     text-align: center;
-    font-size: 0.875rem;
+    font-size: 16px;
     background-color: var(--surface-alt);
     color: var(--ink);
     -moz-appearance: textfield;
@@ -161,6 +169,11 @@ body {
   input.psp-layer-input::-webkit-inner-spin-button {
     -webkit-appearance: none;
     margin: 0;
+  }
+  @media (min-width: 768px) {
+    input.psp-layer-input {
+      font-size: 0.875rem;
+    }
   }
 
   .psp-button {

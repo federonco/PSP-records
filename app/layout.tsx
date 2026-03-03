@@ -1,7 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { DM_Mono, Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+};
 
 const displayFont = Plus_Jakarta_Sans({
   variable: "--font-display",
