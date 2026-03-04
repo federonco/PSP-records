@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --bg: #e8e8e4;
+  --bg: #D8E2EC;
   --surface: #ffffff;
   --surface-alt: #f5f5f2;
   --surface-raised: #f5f5f2;
@@ -144,6 +144,7 @@ body {
   .psp-input {
     @apply h-11 w-full rounded-[12px] border-0 bg-[var(--surface-alt)] px-4 text-[16px] text-[var(--ink)] outline-none transition duration-[250ms] ease-[ease] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[color:var(--primary)/0.25];
   }
+
   @media (min-width: 768px) {
     .psp-input {
       font-size: 0.875rem;
@@ -234,4 +235,25 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+.psp-outer {
+  background: var(--bg);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.08),
+    -10px -10px 20px rgba(255, 255, 255, 0.75);
+}
+
+.psp-inner {
+  background: #f7f6f2;
+  border-radius: calc(var(--radius) - 8px);
+
+  /* Offset: más aire arriba, mínimo a los lados y abajo */
+  margin-top: 14px;
+  margin-left: 6px;
+  margin-right: 6px;
+  margin-bottom: 6px;
+
+  padding: 16px;
 }
