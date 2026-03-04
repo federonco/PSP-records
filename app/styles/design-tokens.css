@@ -39,9 +39,9 @@
   /* -----------------------------------------------------------
      TIPOGRAFÍA — ESCALA
   ----------------------------------------------------------- */
-  --font-family-display:     'Rajdhani', 'Bebas Neue', sans-serif; /* Títulos grandes tipo DIAGNOSTIC */
-  --font-family-body:        'DM Sans', 'Sora', sans-serif;         /* Texto general de UI */
-  --font-family-mono:        'JetBrains Mono', monospace;           /* Valores numéricos, datos */
+  --font-family-display:     'Manrope', sans-serif; /* Títulos grandes */
+  --font-family-body:        'Manrope', sans-serif; /* Texto general de UI */
+  --font-family-mono:        'Manrope', sans-serif; /* Valores numéricos, datos */
 
   --font-size-hero:          2.8rem;    /* Títulos de sección tipo "DIAGNOSTIC" */
   --font-size-display:       2rem;      /* Valores grandes: "93%", "7200 rpm" */

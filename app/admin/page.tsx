@@ -817,11 +817,14 @@ type CompactionReportRow = {
           <AuthPanel onAuthChange={setAuthEmail} />
         </header>
 
-        <Card className="psp-card h-[90px] gap-2 py-2">
-          <CardHeader className="pb-0">
-            <CardTitle className="text-sm">Location:</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-1 items-center gap-2 pt-0">
+        <div className="psp-outer">
+          <div className="px-3 pt-2">
+            <span className="psp-label">Location</span>
+          </div>
+
+          <div className="psp-inner">
+            <div className="flex items-center gap-2">
+
             <Select
               value={locationSelectValue}
               onValueChange={(value) => setLocationId(value)}
@@ -838,6 +841,7 @@ type CompactionReportRow = {
                 ))}
               </SelectContent>
             </Select>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -849,161 +853,184 @@ type CompactionReportRow = {
                   ⋮
                 </Button>
               </DropdownMenuTrigger>
+
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => openLocationModal("create")}>
                   Create Location
                 </DropdownMenuItem>
+
                 <DropdownMenuItem
                   onClick={() => openLocationModal("edit", locationId)}
                   disabled={!locationId}
                 >
                   Edit Location
                 </DropdownMenuItem>
+
                 <DropdownMenuItem onClick={handleOpenEditRecord} disabled={!locationId}>
                   Edit Record
                 </DropdownMenuItem>
+
                 <DropdownMenuItem onClick={() => setAuditOpen(true)}>
                   Audit
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
-          </CardContent>
-        </Card>
 
-        <Card className="psp-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">
-              {selectedLocation?.name ?? "Section Reports"}
-            </CardTitle>
-            <div className="text-xs font-semibold uppercase tracking-widest text-[var(--muted-foreground)]">
-              PSP Compaction Reports
+            </DropdownMenu>
+
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {selectedLocation ? (
-              <div className="psp-card-dark bg-[#757575]/70">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-white">
-                    {selectedLocation.name}
-                  </p>
-                  <div className="flex gap-2 text-xs">
-                    <Badge className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-semibold text-white">
-                      Ready {compactionSummary.ready}
-                    </Badge>
-                    <Badge className="rounded-full bg-[var(--neutral)] px-2 py-0.5 text-[10px] font-semibold text-[var(--neutral-foreground)]">
-                      Open {compactionSummary.open}
-                    </Badge>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 w-7 shrink-0 rounded-full border border-white/30 bg-[#757575] text-black hover:bg-[#757575]/90"
-                      onClick={syncCompactionReports}
-                      disabled={!authEmail || syncingReports}
-                      title={syncingReports ? "Syncing..." : "Sync"}
-                    >
-                      <RefreshCw
-                        className={`size-4 ${syncingReports ? "animate-spin" : ""}`}
-                      />
-                    </Button>
-                  </div>
-                </div>
-                <p className="mt-1 text-xs text-black">
-                  Records: {records.length}
-                </p>
-                {locationRequirement !== null ? (
-                  <p className="mt-1 text-xs text-black">
-                    Minimum ITR required: {locationRequirement}
-                  </p>
-                ) : null}
-                {locationRequirement !== null ? (
-                  <div className="mt-2 grid gap-1 text-xs text-black">
-                    <div className="flex items-center justify-between">
-                      <span>Reports ready</span>
-                      <span>{compactionSummary.ready}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Reports pending</span>
-                      <span>{progressSummary.pending}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Progress</span>
-                      <span>{progressSummary.percent}%</span>
-                    </div>
-                  </div>
-                ) : null}
+
+          </div>
+
+        </div>
+
+        <div className="psp-outer">
+  {/* “Banda superior” (más aire arriba, como tu referencia May 2025) */}
+  <div className="px-6 pt-5 pb-2">
+    <div className="flex items-start justify-between gap-3">
+      <div>
+        <div className="psp-label">PSP Compaction Reports</div>
+        <div className="psp-title text-sm">
+          {selectedLocation?.name ?? "Section Reports"}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {/* Inner card (tiza) */}
+  <div className="psp-inner">
+    <div className="space-y-3">
+      {selectedLocation ? (
+        <div className="psp-card-dark bg-[#757575]/70">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-white">
+              {selectedLocation.name}
+            </p>
+            <div className="flex gap-2 text-xs">
+              <Badge className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-semibold text-white">
+                Ready {compactionSummary.ready}
+              </Badge>
+              <Badge className="rounded-full bg-[var(--neutral)] px-2 py-0.5 text-[10px] font-semibold text-[var(--neutral-foreground)]">
+                Open {compactionSummary.open}
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-7 shrink-0 rounded-full border border-white/30 bg-[#757575] text-black hover:bg-[#757575]/90"
+                onClick={syncCompactionReports}
+                disabled={!authEmail || syncingReports}
+                title={syncingReports ? "Syncing..." : "Sync"}
+              >
+                <RefreshCw
+                  className={`size-4 ${syncingReports ? "animate-spin" : ""}`}
+                />
+              </Button>
+            </div>
+          </div>
+
+          <p className="mt-1 text-xs text-black">Records: {records.length}</p>
+
+          {locationRequirement !== null ? (
+            <p className="mt-1 text-xs text-black">
+              Minimum ITR required: {locationRequirement}
+            </p>
+          ) : null}
+
+          {locationRequirement !== null ? (
+            <div className="mt-2 grid gap-1 text-xs text-black">
+              <div className="flex items-center justify-between">
+                <span>Reports ready</span>
+                <span>{compactionSummary.ready}</span>
               </div>
-            ) : null}
-            {compactionReports.length ? (
-              <div className="max-h-[320px] space-y-3 overflow-y-auto pr-1">
-                {compactionReports.map((report) => {
-                  const range = report.block_key.replace("-", " → ");
-                  const isOpen = report.status === "OPEN";
-                  const pendingCount = report.pending_chainages?.length ?? 0;
-                  const completedCount = Math.max(0, BLOCK_SIZE - pendingCount);
-                  const progressPercent = Math.round(
-                    (completedCount / BLOCK_SIZE) * 100,
-                  );
-                  return (
-                    <div
-                      key={report.id}
-                      className="flex items-center justify-between rounded-[20px] bg-[var(--surface)] px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+              <div className="flex items-center justify-between">
+                <span>Reports pending</span>
+                <span>{progressSummary.pending}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Progress</span>
+                <span>{progressSummary.percent}%</span>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {compactionReports.length ? (
+        <div className="max-h-[320px] space-y-3 overflow-y-auto pr-1">
+          {compactionReports.map((report) => {
+            const range = report.block_key.replace("-", " → ");
+            const isOpen = report.status === "OPEN";
+            const pendingCount = report.pending_chainages?.length ?? 0;
+            const completedCount = Math.max(0, BLOCK_SIZE - pendingCount);
+            const progressPercent = Math.round(
+              (completedCount / BLOCK_SIZE) * 100,
+            );
+
+            return (
+              <div
+                key={report.id}
+                className="flex items-center justify-between rounded-[20px] bg-[var(--surface)] px-4 py-3 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+              >
+                <div>
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Report #{report.block_index ?? "—"}
+                  </p>
+                  <p className="text-sm font-semibold">{range}</p>
+
+                  <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                    Status:{" "}
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
+                        report.status === "READY"
+                          ? "bg-[#16a34a]"
+                          : "bg-[var(--neutral)]"
+                      }`}
                     >
-                      <div>
-                        <p className="text-xs text-[var(--muted-foreground)]">
-                          Report #{report.block_index ?? "—"}
-                        </p>
-                        <p className="text-sm font-semibold">{range}</p>
-                        <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                          Status:{" "}
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
-                              report.status === "READY"
-                                ? "bg-[#16a34a]"
-                                : "bg-[var(--neutral)]"
-                            }`}
-                          >
-                            {report.status === "READY" ? "READY" : "OPEN"}
-                          </span>
-                        </p>
-                        {isOpen && report.pending_chainages?.length ? (
-                          <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                            Pending Ch: {report.pending_chainages.join(", ")}
-                          </p>
-                        ) : null}
-                        {isOpen ? (
-                          <div className="mt-2 space-y-1">
-                            <div className="flex items-center justify-between text-[10px] text-[var(--muted-foreground)]">
-                              <span>Complete</span>
-                              <span>{progressPercent}%</span>
-                            </div>
-                            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-alt)]">
-                              <div
-                                className="h-full rounded-full bg-[#f59e0b]"
-                                style={{ width: `${progressPercent}%` }}
-                              />
-                            </div>
-                          </div>
-                        ) : null}
+                      {report.status === "READY" ? "READY" : "OPEN"}
+                    </span>
+                  </p>
+
+                  {isOpen && report.pending_chainages?.length ? (
+                    <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+                      Pending Ch: {report.pending_chainages.join(", ")}
+                    </p>
+                  ) : null}
+
+                  {isOpen ? (
+                    <div className="mt-2 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-[var(--muted-foreground)]">
+                        <span>Complete</span>
+                        <span>{progressPercent}%</span>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
-                          report.status === "OPEN"
-                            ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
-                            : "bg-[#16a34a]"
-                        }`}
-                        onClick={() => handleSendPdf(report)}
-                      >
-                        Send PDF
-                      </Button>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-alt)]">
+                        <div
+                          className="h-full rounded-full bg-[#f59e0b]"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                      </div>
                     </div>
-                  );
-                })}
+                  ) : null}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
+                    report.status === "OPEN"
+                      ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
+                      : "bg-[#16a34a]"
+                  }`}
+                  onClick={() => handleSendPdf(report)}
+                >
+                  Send PDF
+                </Button>
               </div>
-            ) : null}
-          </CardContent>
-        </Card>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  </div>
+</div>
 
       </div>
 

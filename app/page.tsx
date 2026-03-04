@@ -14,13 +14,6 @@
  import { getSupabaseBrowser } from "@/lib/supabase/browser";
  import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
  import { Button } from "@/components/ui/button";
- import {
-   Card,
-   CardContent,
-   CardFooter,
-   CardHeader,
-   CardTitle,
- } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -485,12 +478,9 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
   return (
     <div className="psp-page">
       <div className="psp-shell">
-        <header className="psp-header space-y-3">
+        <header className="psp-outer space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">
-                PSP Record Sheet
-              </p>
               <h1 className="psp-title text-xl text-[var(--ink)]">
                 PSP Record Sheet
               </h1>
@@ -511,75 +501,65 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           </div>
         </header>
 
-        <Card className="psp-card h-[90px] gap-3 py-3">
-          <CardHeader className="pb-0">
-            <CardTitle className="text-sm">Location</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-1 items-center pt-0 -mt-[9px]">
-            <Select
-              value={locationSelectValue}
-              onValueChange={(value) => setLocationId(value)}
-            >
-              <SelectTrigger className="psp-input -mt-[5px] w-full max-w-[320px]">
-                <SelectValue placeholder="Select location" />
-              </SelectTrigger>
-              <SelectContent className="w-[360px] -mt-[2px] p-0">
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id} className="h-10 items-center">
-                    {loc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+        <div className="psp-outer">
+          <div className="mx-[6px] text-sm font-semibold">Location</div>
 
-        <Card className="psp-card-dark h-[180px]">
-          <CardHeader className="pb-0">
-            <CardTitle className="text-[16px] font-semibold text-[var(--text-inverse-muted)]">
-              Current Chainage (m)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-1 flex-col items-center justify-center gap-3">
-            <div className="flex w-full items-center justify-between gap-3 -mt-[23px]">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-10 shrink-0 min-w-10 min-h-10 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90 md:size-12 md:min-w-12 md:min-h-12"
-                onClick={() =>
-                  handleAdjustChainage(-CHAINAGE_STEP)
-                }
-              >
-                -
-              </Button>
-              <div className="relative h-14 w-full min-w-0 max-w-[224px] shrink">
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  value={chainageDisplay}
-                  onChange={(event) => handleChainageChange(event.target.value)}
-                  onBlur={handleChainageBlur}
-                  disabled={chainageLoading}
-                  className="psp-mono psp-hero h-14 w-full bg-[var(--surface-alt)] text-center text-[var(--ink)] pr-10"
-                />
-                {chainageLoading ? (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[var(--ink)]/70">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </span>
-                ) : null}
-              </div>
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-10 shrink-0 min-w-10 min-h-10 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] backdrop-blur-[6px] hover:bg-[#51B58B]/90 md:size-12 md:min-w-12 md:min-h-12"
-                onClick={() =>
-                  handleAdjustChainage(CHAINAGE_STEP)
-                }
-              >
-                +
-              </Button>
-            </div>
-            {checking ? (
+          <Select
+            value={locationSelectValue}
+            onValueChange={(value) => setLocationId(value)}
+          >
+            <SelectTrigger className="psp-input mt-[14px] mb-[2px] mx-[2px] w-[calc(100%-4px)] bg-[var(--inner-bg)]">
+              <SelectValue placeholder="Select location" />
+            </SelectTrigger>
+            <SelectContent className="w-[360px] -mt-[2px] p-0">
+              {locations.map((loc) => (
+                <SelectItem key={loc.id} value={loc.id} className="h-10 items-center">
+                  {loc.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="psp-outer">
+          <div className="mx-[6px] text-sm font-semibold">Current Chainage (m)</div>
+
+          <div className="relative mx-[2px] mt-[14px] mb-[2px] w-[calc(100%-4px)]">
+            <Input
+              type="text"
+              inputMode="decimal"
+              value={chainageDisplay}
+              onChange={(event) => handleChainageChange(event.target.value)}
+              onBlur={handleChainageBlur}
+              disabled={chainageLoading}
+              className="psp-mono psp-hero h-9 min-h-9 w-full rounded-[12px] border border-[var(--input-border)] bg-[var(--inner-bg)] px-12 py-2 text-center text-[var(--ink)] focus:ring-2 focus:ring-[color:var(--primary)/0.25]"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="absolute left-1.5 top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] hover:bg-[#51B58B]/90"
+              onClick={() => handleAdjustChainage(-CHAINAGE_STEP)}
+            >
+              -
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="absolute right-1.5 top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] hover:bg-[#51B58B]/90"
+              onClick={() => handleAdjustChainage(CHAINAGE_STEP)}
+            >
+              +
+            </Button>
+            {chainageLoading ? (
+              <span className="absolute right-12 top-1/2 z-10 -translate-y-1/2 pointer-events-none text-[var(--ink)]/70">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </span>
+            ) : null}
+          </div>
+
+          {checking ? (
               <div className="w-full max-w-[260px] space-y-1">
                 <div className="text-center text-xs text-[var(--text-inverse-muted)]">
                   Checking...
@@ -589,8 +569,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 </div>
               </div>
             ) : null}
-          </CardContent>
-        </Card>
+        </div>
 
         {duplicate ? (
           <Alert className="border-[var(--warning)] bg-[color:var(--warning)/0.08] text-[var(--warning)]">
@@ -601,9 +580,9 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           </Alert>
         ) : null}
 
-        <Card className="psp-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Layers</CardTitle>
+        <div className="psp-outer">
+          <div className="pb-2">
+            <div className="text-sm font-semibold">Layers</div>
             <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
               <span className="font-semibold">Penetrometer S/N:</span>
               <Select
@@ -703,26 +682,32 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
+          </div>
+          <div className="space-y-3">
             <div className="grid gap-3">
               {[0, 1, 2].map((layerIndex) => (
                 <div
                   key={`layer-${layerIndex}`}
                   className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 >
-                      <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[var(--muted-foreground)]">
+                  <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[var(--muted-foreground)]">
                     <span>Layer {layerIndex + 1}</span>
                     <span>Number of blows</span>
                   </div>
                   <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
-                    {layerFields.slice(layerIndex * 3, layerIndex * 3 + 3).map(
-                      (field) => {
+                    {layerFields
+                      .slice(layerIndex * 3, layerIndex * 3 + 3)
+                      .map((field) => {
                         const value = layers[field.key];
                         const warning = layerOutOfRange(value);
                         return (
-                          <div key={field.key} className="grid min-w-0 content-start gap-1">
-                            <label className="psp-label truncate">{field.label}</label>
+                          <div
+                            key={field.key}
+                            className="grid min-w-0 content-start gap-1"
+                          >
+                            <label className="psp-label truncate">
+                              {field.label}
+                            </label>
                             <Input
                               type="number"
                               min={0}
@@ -731,7 +716,11 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                               onChange={(event) =>
                                 updateLayerValue(field.key, event.target.value)
                               }
-                              className={`psp-layer-input ${warning ? "border border-[var(--danger)] bg-[color:var(--danger)/0.08]" : ""}`}
+                              className={`psp-layer-input ${
+                                warning
+                                  ? "border border-[var(--danger)] bg-[color:var(--danger)/0.08]"
+                                  : ""
+                              }`}
                             />
                             {warning ? (
                               <p className="text-xs text-[var(--danger)]">
@@ -740,78 +729,79 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                             ) : null}
                           </div>
                         );
-                      },
-                    )}
+                      })}
                   </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="psp-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Inspector + Signature</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <label className="psp-label">Site Inspector</label>
-              <Select value={siteInspector} onValueChange={setSiteInspector}>
-                <SelectTrigger className="psp-input">
-                  <SelectValue placeholder="Select inspector" />
-                </SelectTrigger>
-                <SelectContent>
-                  {inspectorOptions.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold">Signature</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="psp-button shrink-0 h-9 min-h-9 px-4 text-xs bg-[#2F966A] text-white hover:bg-[#2F966A]/90"
-                  onClick={() => setSignatureOpen(true)}
-                  disabled={!siteInspector}
-                >
-                  Tap to Sign
-                </Button>
-              </div>
+        <div className="psp-outer">
+          <div className="mx-[6px] text-sm font-semibold">Signature</div>
+
+          <Select value={siteInspector} onValueChange={setSiteInspector}>
+            <SelectTrigger className="psp-input mt-[14px] mb-[2px] mx-[2px] w-[calc(100%-4px)] bg-[var(--inner-bg)]">
+              <SelectValue placeholder="Select inspector" />
+            </SelectTrigger>
+            <SelectContent>
+              {inspectorOptions.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <div className="mt-[14px] mx-[2px] w-[calc(100%-4px)] space-y-2">
+            <div className="rounded-[12px] bg-[var(--inner-bg)] min-h-[180px] overflow-hidden relative flex flex-col">
               {signatureStrokes ? (
-                <SignaturePreview strokes={signatureStrokes} />
+                <div className="overflow-hidden">
+                  <SignaturePreview strokes={signatureStrokes} />
+                </div>
+              ) : signatureOpen ? (
+                <div className="p-2 flex flex-col gap-3">
+                  <SignaturePad
+                    wrapperClassName="bg-[var(--inner-bg)]"
+                    onSave={handleSaveSignature}
+                    onCancel={() => setSignatureOpen(false)}
+                  />
+                </div>
               ) : (
-                <div className="rounded-[10px] border border-dashed border-[var(--border)] bg-[var(--surface-2)] px-3 py-6 text-center text-xs text-[var(--muted-foreground)]">
-                  No signature saved.
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 px-6 rounded-[12px] border border-[var(--border)] bg-[var(--inner-bg)] text-[var(--muted-foreground)] hover:bg-[var(--surface-alt)] hover:text-[var(--ink)]"
+                    onClick={() => setSignatureOpen(true)}
+                    disabled={!siteInspector}
+                  >
+                    Tap to Sign
+                  </Button>
                 </div>
               )}
-              {signOffAt ? (
-                <p className="text-xs text-[var(--muted-foreground)]">
-                  Signed by {signOffBy ?? "Unknown"} at{" "}
-                  {new Date(signOffAt).toLocaleString()}
-                </p>
-              ) : null}
             </div>
-          </CardContent>
-        </Card>
+            {signOffAt ? (
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Signed by {signOffBy ?? "Unknown"} at{" "}
+                {new Date(signOffAt).toLocaleString()}
+              </p>
+            ) : null}
+          </div>
+        </div>
 
-        <Card className="psp-card">
-          <CardContent className="pt-0 text-[#51B58B]">
-            <ConfirmButton
-              label={loading ? "Lodging..." : "Lodge Record"}
-              confirmLabel="CONFIRM?"
-              onConfirm={handleLodge}
-              disabled={!canSubmit || loading || duplicate}
-              className="psp-button w-full shrink-0 min-h-11 bg-[#51B58B] text-white hover:bg-[#51B58B]/90"
-              confirmClassName="psp-button-warning"
-            />
-          </CardContent>
+        <div className="pt-0 text-[#51B58B]">
+          <ConfirmButton
+            label={loading ? "Lodging..." : "Lodge Record"}
+            confirmLabel="CONFIRM?"
+            onConfirm={handleLodge}
+            disabled={!canSubmit || loading || duplicate}
+            className="psp-button w-full shrink-0 min-h-11 bg-[#51B58B] text-white hover:bg-[#51B58B]/90"
+            confirmClassName="psp-button-warning"
+          />
           {duplicate ? (
-            <CardFooter className="pt-3">
+            <div className="pt-3">
               <Button
                 variant="destructive"
                 className="w-full shrink-0 min-h-11"
@@ -820,22 +810,10 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               >
                 Proceed to overwrite
               </Button>
-            </CardFooter>
+            </div>
           ) : null}
-        </Card>
+        </div>
       </div>
-
-      <Dialog open={signatureOpen} onOpenChange={setSignatureOpen}>
-        <DialogContent className="max-w-[560px]">
-          <DialogHeader>
-            <DialogTitle>Inspector Signature</DialogTitle>
-          </DialogHeader>
-          <SignaturePad
-            onSave={handleSaveSignature}
-            onCancel={() => setSignatureOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={adminAuthOpen} onOpenChange={setAdminAuthOpen}>
         <DialogContent>

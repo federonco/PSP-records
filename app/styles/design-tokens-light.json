@@ -31,9 +31,9 @@
 
   "typography": {
     "fonts": {
-      "display": "'Plus Jakarta Sans', Outfit, sans-serif",
-      "body":    "'Inter', 'DM Sans', sans-serif",
-      "mono":    "'DM Mono', monospace"
+      "display": "'Manrope', sans-serif",
+      "body":    "'Manrope', sans-serif",
+      "mono":    "'Manrope', sans-serif"
     },
     "sizes": {
       "hero":    "2.4rem",

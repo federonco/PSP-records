@@ -37,9 +37,9 @@
   /* -----------------------------------------------------------
      TIPOGRAFÍA — FUENTES
   ----------------------------------------------------------- */
-  --font-family-display:     'Plus Jakarta Sans', 'Outfit', sans-serif; /* Títulos y valores grandes */
-  --font-family-body:        'Inter', 'DM Sans', sans-serif;            /* Texto de UI */
-  --font-family-mono:        'DM Mono', monospace;                      /* Valores numéricos */
+  --font-family-display:     'Manrope', sans-serif; /* Títulos y valores grandes */
+  --font-family-body:        'Manrope', sans-serif; /* Texto de UI */
+  --font-family-mono:        'Manrope', sans-serif; /* Valores numéricos */
 
   /* -----------------------------------------------------------
      TIPOGRAFÍA — ESCALA

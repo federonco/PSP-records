@@ -14,6 +14,7 @@
    height?: number;
    onSave: (payload: SignatureStrokes) => void;
    onCancel: () => void;
+   wrapperClassName?: string;
  };
 
  export function SignaturePad({
@@ -21,6 +22,7 @@
    height = 180,
    onSave,
    onCancel,
+   wrapperClassName,
  }: SignaturePadProps) {
    const canvasRef = useRef<HTMLCanvasElement | null>(null);
    const [strokes, setStrokes] = useState<SignatureStrokes["strokes"]>([]);
@@ -100,7 +102,7 @@
 
    return (
      <div className="space-y-3">
-       <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-2">
+       <div className={`rounded-[12px] border border-[var(--border)] p-2 ${wrapperClassName ?? "bg-[var(--surface-2)]"}`}>
          <canvas
            ref={canvasRef}
            width={size.w}
