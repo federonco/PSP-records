@@ -5,45 +5,123 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --bg: #D8E2EC;
-  --surface: #ffffff;
-  --surface-alt: #f5f5f2;
+  /* ===============================
+     APP BACKGROUND
+  ================================ */
+  --bg: #F7F9FB; /* color del fondo de la app */
+  --background: var(--bg);
+  --surface: #D1DEE9; /* color de las cards layers */
+  --surface-alt: #F7F9FB; /* color de los casilleros */
   --surface-raised: #f5f5f2;
   --surface-2: var(--surface-alt);
   --surface-dark: #2d3830;
   --surface-dark-raised: #3a4a3e;
   --overlay: #f5f5f2;
-  --ink: #1a1a1a;
+  --card-bg: #E6EDF3; /* color del fondo de las cards */
+  --inner-bg: #F7FAFD;
+  --button-primary-bg: #1a1a1a;
+
+  /* ===============================
+     BOTONES PSP (probar colores aquí)
+  ================================ */
+  /* Botones - y + del Current Chainage (stepper) */
+  --psp-stepper-bg: var(--color-blue-deep);
+  /* Botón "Lodge Record" */
+  --psp-lodge-bg: var(--color-blue-deep);
+  --psp-lodge-bg-hover: rgba(58, 95, 138, 0.9);
+
+  /* ===============================
+     TEXT COLORS
+     Cambiar aquí para ver en vivo. Una variable por tipo de texto.
+  ================================ */
+  /* Principal: títulos, números grandes, texto de inputs */
+  --ink: #6b7280;
+  --foreground: var(--ink);
+  /* Secundario: labels, hints, footer, textos auxiliares */
   --muted: #9ca3af;
-  --primary: #e8524a;
-  --success: #e8524a;
-  --info: #4ab8d4;
-  --warning: #e8524a;
-  --danger: #e8524a;
-  --neutral: #2d3830;
-  --neutral-foreground: #ffffff;
+  --muted-foreground: #6b7280;
+  /* Mismo uso que muted-foreground (labels, botón ghost) */
+  --text-secondary: #6b7280;
+  /* Placeholders en inputs */
+  --text-muted: #9ca3af;
+  /* Acentos / links */
+  --text-accent: var(--color-blue-deep);
+  /* Sobre fondos oscuros (cards dark) */
+  --text-inverse: #ffffff;
+  --text-inverse-muted: #a0aca6;
+
+  /* Resumen: variable → qué texto controla
+     --ink               → títulos, texto principal, valor en inputs
+     --muted-foreground  → labels, hints, footer, "tap to sign", secundario
+     --text-secondary    → igual que muted-foreground (labels, botón ghost)
+     --text-muted        → placeholders
+     --text-inverse      → texto sobre fondos oscuros
+     --text-inverse-muted→ texto suave sobre fondos oscuros
+     --danger, --warning → mensajes de error/alertas (más abajo en tokens)
+  */
+
+  /* ===============================
+     BORDERS
+  ================================ */
   --border: #e2e2de;
   --border-subtle: #f0f0ed;
-  --shadow: 0 2px 16px rgba(0, 0, 0, 0.08);
-  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.12);
-  --shadow-fab: 0 4px 20px rgba(232, 82, 74, 0.35);
-  --radius: 28px;
+  --card-border: var(--color-border-soft);
+  --input-border: #D6DEE8;
+  --color-blue-deep: #556F87;
+  --color-border-soft: #D3DAE1;
+  --color-text-main: #6b7280;
+  --ring-soft: rgba(211, 218, 225, 0.4);
+
+  /* ===============================
+     SHADOWS (disabled)
+  ================================ */
+  --shadow: none;
+  --shadow-elevated: none;
+  --shadow-fab: none;
+
+  /* ===============================
+     RADIUS SYSTEM
+  ================================ */
+  --radius: 18px;
+  --radius-inner: calc(var(--radius) - 8px);
+  --radius-input: 12px;
   --radius-pill: 9999px;
-  --background: var(--bg);
-  --foreground: var(--ink);
+
+  /* ===============================
+     SPACING SYSTEM
+  ================================ */
+  --card-padding: 18px;
+  --card-gap: 24px;
+
+  /* ===============================
+     TYPOGRAPHY
+  ================================ */
+  --font-body: "Manrope";
+  --font-display: "Manrope";
+  --font-code: "Manrope";
+
+  /* ===============================
+     COMPONENT TOKENS (shadcn/theme)
+  ================================ */
   --card: var(--surface);
   --card-foreground: var(--ink);
   --popover: var(--surface);
   --popover-foreground: var(--ink);
+  --primary: #556F87;
   --primary-foreground: #ffffff;
   --secondary: var(--surface-alt);
   --secondary-foreground: var(--ink);
-  --muted-foreground: #6b7280;
   --accent: var(--surface-alt);
   --accent-foreground: var(--ink);
   --destructive: var(--danger);
   --input: var(--surface-alt);
-  --ring: rgba(232, 82, 74, 0.25);
+  --ring: rgba(85, 111, 135, 0.25);
+  --success: #5F8F73;
+  --info: #4ab8d4;
+  --warning: #C9A84E;
+  --danger: #A94A4A;
+  --neutral: #2d3830;
+  --neutral-foreground: #ffffff;
   --chart-1: #e8524a;
   --chart-2: #4ab8d4;
   --chart-3: #2d3830;
@@ -57,12 +135,65 @@
   --sidebar-accent-foreground: #1a1a1a;
   --sidebar-border: #e2e2de;
   --sidebar-ring: rgba(26, 26, 26, 0.2);
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --text-accent: #e8524a;
-  --text-inverse: #ffffff;
-  --text-inverse-muted: #a0aca6;
+
+  /* ===============================
+     SURFACE ALIASES
+  ================================ */
+  --app-bg: var(--bg);
+  --layer-bg: var(--surface);
+  --slot-bg: var(--surface-alt);
+  --card-main-bg: var(--card-bg);
+
+  /* ===============================
+     CARD INSETS
+  ================================ */
+  --card-inset-x: 6px;
+  --card-inset-bottom: 6px;
+  --card-inset-top: 14px;
+
+  /* ===============================
+     ELEVATION
+  ================================ */
+  --elev-card: var(--shadow);
+  --elev-overlay: var(--shadow-elevated);
+  --elev-toast: var(--shadow);
+
+  /* ===============================
+     INTERACTION / FOCUS
+  ================================ */
+  --focus-ring: var(--ring);
+  --focus-outline: var(--ring);
+
+  /* ===============================
+     COMPONENT SIZING
+  ================================ */
+  --control-h: 44px;
+  --button-h: 44px;
+  --icon-btn-size: 36px;
+
+  /* ===============================
+     Z-INDEX LAYERS
+  ================================ */
+  --z-dropdown: 50;
+  --z-modal: 60;
+  --z-toast: 70;
+
+  /* ===============================
+     MOTION
+  ================================ */
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --ease-standard: ease;
+
+  /* ===============================
+     SEMANTIC STATUS COLORS
+  ================================ */
+  --status-success: var(--success);
+  --status-warning: var(--warning);
+  --status-danger: var(--danger);
 }
+
+/* Typography: Manrope for all (--font-display, --font-body, --font-code). Sizes via Tailwind (text-xs, text-sm, etc.). */
 
 @theme inline {
   --color-background: var(--bg);
@@ -113,7 +244,9 @@ html {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: var(--font-body), "Segoe UI", sans-serif;
+  --font-display: var(--font-body);
+  --font-code: var(--font-body);
+  font-family: var(--font-body), "Manrope", sans-serif;
 }
 
 @layer components {
@@ -122,19 +255,31 @@ body {
   }
 
   .psp-shell {
-    @apply mx-auto w-full max-w-md md:max-w-xl space-y-4;
+    @apply mx-auto w-full max-w-md md:max-w-xl space-y-6;
   }
 
+  /* Misma lógica que psp-outer; altura +50% (padding vertical 25% * 1.5) */
   .psp-header {
-    @apply rounded-[var(--radius)] bg-[var(--surface)] px-6 py-5 shadow-[var(--shadow)];
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: calc(var(--card-padding) * 0.375) var(--card-padding);
+    border: 1px solid var(--card-border);
+    box-shadow: none;
+  }
+  /* Bajar el título sin agrandar la card: margen superior + compensación abajo */
+  .psp-header .psp-header-title-wrap {
+    margin-top: calc(var(--card-padding) * 0.25 * 0.75);
+    margin-bottom: calc(var(--card-padding) * -0.25 * 0.75);
   }
 
   .psp-card {
-    @apply rounded-[var(--radius)] bg-[var(--surface)] px-6 py-6 shadow-[var(--shadow)];
+    @apply rounded-[var(--radius)] bg-[var(--surface)] px-6 py-6;
+    border: 1px solid var(--card-border);
   }
 
   .psp-card-dark {
-    @apply rounded-[var(--radius)] bg-[var(--surface-dark)] px-6 py-6 text-[var(--text-inverse)] shadow-[var(--shadow)];
+    @apply rounded-[var(--radius)] bg-[var(--surface-dark)] px-6 py-6 text-[var(--text-inverse)];
+    border: 1px solid var(--card-border);
   }
 
   .psp-label {
@@ -142,7 +287,71 @@ body {
   }
 
   .psp-input {
-    @apply h-11 w-full rounded-[12px] border-0 bg-[var(--surface-alt)] px-4 text-[16px] text-[var(--ink)] outline-none transition duration-[250ms] ease-[ease] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[color:var(--primary)/0.25];
+    @apply h-11 w-full bg-[var(--surface-alt)] px-4 text-[16px] text-[var(--ink)] outline-none transition duration-[250ms] ease-[ease] placeholder:text-[var(--text-muted)] focus:ring-2 focus:ring-[color:var(--primary)/0.25];
+    border: 1px solid var(--input-border);
+    border-radius: var(--radius-input);
+  }
+  /* SelectTrigger con psp-input: mismo border-radius que las outer cards */
+  [data-slot="select-trigger"].psp-input {
+    border-radius: var(--radius);
+  }
+  /* Todos los SelectTrigger: borde #D3DAE1 */
+  [data-slot="select-trigger"] {
+    border-color: var(--color-border-soft) !important;
+  }
+  [data-slot="select-trigger"]:focus-visible {
+    border-color: var(--color-border-soft) !important;
+    box-shadow: 0 0 0 3px var(--ring-soft) !important;
+  }
+  /* Inspector select: borde y ring #D3DAE1 (también al enfocar) cuando hay inspector seleccionado */
+  button.psp-select-inspector-filled,
+  button.psp-select-inspector-filled:focus,
+  button.psp-select-inspector-filled:focus-visible {
+    border-color: var(--color-border-soft) !important;
+    box-shadow: 0 0 0 3px var(--ring-soft) !important;
+  }
+  /* Location select: borde y ring #D3DAE1 cuando hay location seleccionada */
+  button.psp-select-location-filled,
+  button.psp-select-location-filled:focus,
+  button.psp-select-location-filled:focus-visible {
+    border-color: var(--color-border-soft) !important;
+    box-shadow: 0 0 0 3px var(--ring-soft) !important;
+  }
+  /* Input en diálogos: borde/ring al enfocar en #D3DAE1 (en vez del rojo primary) */
+  .psp-input-dialog:focus,
+  .psp-input-dialog:focus-visible {
+    border-color: var(--color-border-soft) !important;
+    box-shadow: 0 0 0 3px var(--ring-soft) !important;
+  }
+  /* Sin selección roja: texto del input en #6b7280; si hay selección, fondo #D3DAE1 */
+  .psp-input-dialog {
+    color: var(--color-text-main);
+  }
+  .psp-input-dialog::selection {
+    background-color: var(--color-border-soft) !important;
+    color: var(--color-text-main) !important;
+  }
+  /* Auth panel (Sign in): borde/ring #D3DAE1 al enfocar en Email/Password */
+  .psp-input-auth:focus,
+  .psp-input-auth:focus-visible {
+    border-color: var(--color-border-soft) !important;
+    box-shadow: 0 0 0 3px var(--ring-soft) !important;
+  }
+  .psp-input-auth::selection {
+    background-color: #AAB4BE !important;
+    color: var(--ink);
+  }
+  /* Auth panel: botón Sign in siempre #556F87 (también cuando está disabled) */
+  .psp-auth-panel .psp-auth-sign-in-btn {
+    background-color: var(--color-blue-deep) !important;
+    color: #ffffff !important;
+  }
+  .psp-auth-panel .psp-auth-sign-in-btn:hover:not(:disabled) {
+    background-color: rgba(85, 111, 135, 0.9) !important;
+  }
+  .psp-auth-panel .psp-auth-sign-in-btn:disabled {
+    background-color: var(--color-blue-deep) !important;
+    opacity: 0.7;
   }
 
   @media (min-width: 768px) {
@@ -156,7 +365,7 @@ body {
     min-height: 2.75rem !important;
     width: 100%;
     min-width: 0;
-    border-radius: 12px;
+    border-radius: var(--radius-input);
     border: 0;
     padding: 0.5rem 0.75rem;
     text-align: center;
@@ -182,11 +391,12 @@ body {
   }
 
   .psp-button-primary {
-    @apply bg-[#1a1a1a] text-white;
+    @apply text-white;
+    background-color: var(--button-primary-bg);
   }
 
   .psp-button-success {
-    @apply bg-[var(--primary)] text-white;
+    @apply bg-[var(--success)] text-white;
   }
 
   .psp-button-warning {
@@ -194,7 +404,7 @@ body {
   }
 
   .psp-button-danger {
-    @apply bg-[var(--primary)] text-white;
+    @apply bg-[var(--danger)] text-white;
   }
 
   .psp-button-ghost {
@@ -203,12 +413,28 @@ body {
 
   .psp-title {
     @apply font-semibold text-[var(--ink)];
-    font-family: var(--font-display), "Outfit", sans-serif;
+    font-family: var(--font-display), "Manrope", sans-serif;
     letter-spacing: -0.02em;
   }
 
+  /* Título principal de página (ej. "PSP Record Sheet"): size, color, peso. Usar esta clase para que otro texto copie el mismo estilo. */
+  .psp-page-title {
+    font-family: var(--font-display), "Manrope", sans-serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+
+  /* Título de sección en cards (ej. "Location", "Current chainage (m)", "Layers", "Signature"). Citarlo para repetir el mismo estilo. */
+  .psp-section-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
   .psp-hero {
-    font-family: var(--font-code), "DM Mono", monospace;
+    font-family: var(--font-code), "Manrope", sans-serif;
     font-size: 2.4rem;
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -216,6 +442,10 @@ body {
 
   .psp-mono {
     font-family: var(--font-code);
+  }
+
+  input.psp-hero {
+    border: 1px solid var(--input-border);
   }
 
   .psp-toast {
@@ -232,22 +462,23 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+  /* Body color is set above (unlayered) as color: var(--ink) so --ink in :root controls main text. Avoid text-foreground here so it does not override. */
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background;
   }
 }
 
 .psp-outer {
-  background: var(--bg);
+  background: var(--card-bg);
   border-radius: var(--radius);
-  padding: 18px;
-  box-shadow: 10px 10px 20px rgba(0, 0, 0, 0.08),
-    -10px -10px 20px rgba(255, 255, 255, 0.75);
+  padding: var(--card-padding);
+  border: 1px solid var(--card-border);
+  box-shadow: none;
 }
 
 .psp-inner {
-  background: #f7f6f2;
-  border-radius: calc(var(--radius) - 8px);
+  background: var(--inner-bg);
+  border-radius: var(--radius-inner);
 
   /* Offset: más aire arriba, mínimo a los lados y abajo */
   margin-top: 14px;
@@ -256,4 +487,141 @@ body {
   margin-bottom: 6px;
 
   padding: 16px;
+}
+
+/* Lodge Record (solo estado inicial "Lodge Record"): azul desde :root --psp-lodge-bg */
+.psp-shell button.psp-button-lodge {
+  background-color: var(--psp-lodge-bg) !important;
+  color: #fff !important;
+}
+.psp-shell button.psp-button-lodge:hover:not(:disabled) {
+  background-color: var(--psp-lodge-bg-hover) !important;
+}
+
+/* Botón "Lodge Record": fondo #556F87 y texto blanco (máxima prioridad) */
+.psp-shell .psp-lodge-record-wrap,
+.psp-shell button.psp-lodge-record-wrap {
+  background-color: var(--color-blue-deep) !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+.psp-shell .psp-lodge-record-wrap:hover:not(:disabled),
+.psp-shell button.psp-lodge-record-wrap:hover:not(:disabled) {
+  background-color: rgba(58, 95, 138, 0.9) !important;
+}
+/* Deshabilitado: mismo azul, solo algo de opacidad para indicar disabled */
+.psp-shell .psp-lodge-record-wrap:disabled,
+.psp-shell button.psp-lodge-record-wrap:disabled {
+  background-color: var(--color-blue-deep) !important;
+  opacity: 0.7;
+}
+
+/* Stepper (+ / -) Current chainage: color del círculo al hover y al presionar */
+.psp-stepper-btn:hover,
+.psp-stepper-btn:active {
+  background-color: #AAB4BE !important;
+}
+
+/* ===============================
+   HEADER STYLES
+=============================== */
+/* Admin header: mismo margen superior que la 1ª outer card de la home (18px), sin agrandar la card */
+header.psp-header .psp-header-title-wrap {
+  padding-top: calc(var(--card-padding) - (var(--card-padding) * 0.25));
+  margin-bottom: calc(-1 * (var(--card-padding) - (var(--card-padding) * 0.25)));
+}
+
+/* Home y Admin header cards: mismo color de fondo */
+header.psp-outer,
+header.psp-header {
+  background: #D1DEE9 !important;
+}
+
+/* Header admin: altura +15% solo por abajo (margen superior del título sin cambios) */
+header.psp-header {
+  padding-top: calc(var(--card-padding) * 0.375) !important;
+  padding-bottom: 28px !important;
+  padding-left: var(--card-padding) !important;
+  padding-right: var(--card-padding) !important;
+}
+
+/* Signed in as: bajar solo este texto; margen inferior = margen superior (6.75px), sin cambiar tamaño de la card */
+header.psp-header .psp-auth-signed-in-row {
+  margin-top: calc(var(--card-padding) * 0.375 - 4px);
+  margin-bottom: calc(4px - var(--card-padding) * 0.375);
+}
+
+/* Create/Edit Location dialog: fondo card, textos y SelectTrigger */
+[data-slot="dialog-content"].psp-dialog-location {
+  background: #F7F9FB !important;
+  color: var(--color-text-main) !important;
+}
+[data-slot="dialog-content"].psp-dialog-location [data-slot="dialog-title"],
+[data-slot="dialog-content"].psp-dialog-location .psp-label,
+[data-slot="dialog-content"].psp-dialog-location input {
+  color: var(--color-text-main) !important;
+}
+[data-slot="dialog-content"].psp-dialog-location [data-slot="select-trigger"] {
+  background-color: #F7F9FB !important;
+  color: var(--color-text-main) !important;
+}
+/* Create Location dialog: borde #D3DAE1 en los 3 inputs */
+.psp-dialog-location-form input.psp-input,
+[data-slot="dialog-content"].psp-dialog-location input.psp-input,
+[data-dialog="location"] input.psp-input {
+  border: 1px solid var(--color-border-soft) !important;
+}
+.psp-dialog-location-form input.psp-input:focus,
+.psp-dialog-location-form input.psp-input:focus-visible,
+[data-slot="dialog-content"].psp-dialog-location input.psp-input:focus,
+[data-slot="dialog-content"].psp-dialog-location input.psp-input:focus-visible,
+[data-dialog="location"] input.psp-input:focus,
+[data-dialog="location"] input.psp-input:focus-visible {
+  border-color: var(--color-border-soft) !important;
+  box-shadow: 0 0 0 3px var(--ring-soft) !important;
+}
+/* Create Location dialog: color de selección de texto en inputs */
+.psp-dialog-location-form input.psp-input::selection {
+  background-color: #9ca3af;
+}
+.psp-dialog-location-form input.psp-input::-moz-selection {
+  background-color: #9ca3af;
+}
+/* Create Location dialog: botón Save */
+.psp-dialog-location-save {
+  background-color: var(--color-blue-deep) !important;
+  color: #fff !important;
+}
+.psp-dialog-location-save:hover:not(:disabled) {
+  background-color: rgba(85, 111, 135, 0.9) !important;
+}
+/* Edit record dialog: botón Continue */
+.psp-dialog-continue-btn {
+  background-color: var(--color-blue-deep) !important;
+  color: #fff !important;
+}
+.psp-dialog-continue-btn:hover:not(:disabled) {
+  background-color: rgba(85, 111, 135, 0.9) !important;
+}
+/* Location Audit dialog: botón Send PDF */
+.psp-dialog-send-pdf-btn {
+  background-color: var(--color-blue-deep) !important;
+  color: #fff !important;
+}
+.psp-dialog-send-pdf-btn:hover:not(:disabled) {
+  background-color: rgba(85, 111, 135, 0.9) !important;
+}
+
+/* Botón X de cierre de diálogos: sin borde por defecto; borde #D3DAE1 al hover/focus/click */
+[data-slot="dialog-close"] {
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+[data-slot="dialog-close"]:hover,
+[data-slot="dialog-close"]:focus,
+[data-slot="dialog-close"]:focus-visible,
+[data-slot="dialog-close"]:active {
+  border-color: var(--color-border-soft) !important;
+  box-shadow: 0 0 0 2px var(--ring-soft) !important;
 }

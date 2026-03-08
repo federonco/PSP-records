@@ -41,12 +41,12 @@ export default function RootLayout({
                 href="https://www.readx.com.au"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 align-middle -translate-y-[2px]"
+                className="inline-flex items-center gap-1 align-middle -translate-y-[1px]"
               >
                 <img
-                  src="https://github.com/federonco/readx-assets/blob/main/readX%20orange.png?raw=true"
+                  src="/readx.png"
                   alt="readX"
-                  className="h-2.5"
+                  className="h-2.5 w-auto"
                 />
                 <sup className="text-[8px]">TM</sup>
               </a>{" "}

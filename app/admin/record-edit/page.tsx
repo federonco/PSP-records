@@ -332,7 +332,7 @@ function RecordEditContent() {
                  onClick={() => setSignatureOpen(true)}
                  disabled={!siteInspector}
                >
-                 Tap to Sign
+                 Tap to sign
                </Button>
              </div>
              {signatureStrokes ? (

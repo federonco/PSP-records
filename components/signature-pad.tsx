@@ -124,15 +124,15 @@
          >
            Clear
          </Button>
-         <Button
-           type="button"
-           size="sm"
-           className="psp-button psp-button-primary h-10 px-4 text-xs"
-           onClick={handleSave}
-           disabled={strokes.length === 0}
-         >
-           Save
-         </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="psp-button h-10 px-4 text-xs bg-[#556F87] text-white hover:bg-[#556F87]/90"
+          onClick={handleSave}
+          disabled={strokes.length === 0}
+        >
+          Save
+        </Button>
          <Button
            type="button"
            variant="ghost"

@@ -481,13 +481,13 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
         <header className="psp-outer space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="psp-title text-xl text-[var(--ink)]">
-                PSP Record Sheet
+              <h1 className="psp-page-title">
+                PSP Record sheet
               </h1>
             </div>
             <Button
               variant="ghost"
-              className="psp-button psp-button-ghost shrink-0 h-8 min-h-8 px-3 text-xs text-[var(--text-secondary)]"
+              className="psp-button psp-button-ghost shrink-0 h-8 min-h-8 border-0 px-3 text-xs text-[var(--text-secondary)]"
               onClick={() => {
                 if (authEmail) {
                   router.push("/admin");
@@ -502,13 +502,15 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
         </header>
 
         <div className="psp-outer">
-          <div className="mx-[6px] text-sm font-semibold">Location</div>
+          <div className="psp-section-label">Location</div>
 
           <Select
             value={locationSelectValue}
             onValueChange={(value) => setLocationId(value)}
           >
-            <SelectTrigger className="psp-input mt-[14px] mb-[2px] mx-[2px] w-[calc(100%-4px)] bg-[var(--inner-bg)]">
+            <SelectTrigger
+              className={`psp-input mt-[14px] mb-[2px] w-full bg-[var(--inner-bg)] ${locationId ? "psp-select-location-filled" : ""}`}
+            >
               <SelectValue placeholder="Select location" />
             </SelectTrigger>
             <SelectContent className="w-[360px] -mt-[2px] p-0">
@@ -522,9 +524,9 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
         </div>
 
         <div className="psp-outer">
-          <div className="mx-[6px] text-sm font-semibold">Current Chainage (m)</div>
+          <div className="psp-section-label">Current chainage (m)</div>
 
-          <div className="relative mx-[2px] mt-[14px] mb-[2px] w-[calc(100%-4px)]">
+          <div className="relative mt-[14px] mb-[2px] w-full">
             <Input
               type="text"
               inputMode="decimal"
@@ -538,7 +540,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               type="button"
               variant="outline"
               size="icon"
-              className="absolute left-1.5 top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] hover:bg-[#51B58B]/90"
+              className="psp-stepper-btn absolute left-[-2px] top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[var(--psp-stepper-bg)] text-white shadow-[var(--shadow)] hover:opacity-90"
               onClick={() => handleAdjustChainage(-CHAINAGE_STEP)}
             >
               -
@@ -547,7 +549,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               type="button"
               variant="outline"
               size="icon"
-              className="absolute right-1.5 top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[#51B58B] text-white shadow-[var(--shadow)] hover:bg-[#51B58B]/90"
+              className="psp-stepper-btn absolute right-[-2px] top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[var(--psp-stepper-bg)] text-white shadow-[var(--shadow)] hover:opacity-90"
               onClick={() => handleAdjustChainage(CHAINAGE_STEP)}
             >
               +
@@ -559,16 +561,6 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             ) : null}
           </div>
 
-          {checking ? (
-              <div className="w-full max-w-[260px] space-y-1">
-                <div className="text-center text-xs text-[var(--text-inverse-muted)]">
-                  Checking...
-                </div>
-                <div className="h-1 w-full overflow-hidden rounded-full bg-[color:var(--text-inverse)/0.2]">
-                  <div className="h-full w-1/2 animate-pulse rounded-full bg-[var(--text-inverse)]" />
-                </div>
-              </div>
-            ) : null}
         </div>
 
         {duplicate ? (
@@ -582,117 +574,120 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
 
         <div className="psp-outer">
           <div className="pb-2">
-            <div className="text-sm font-semibold">Layers</div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-              <span className="font-semibold">Penetrometer S/N:</span>
-              <Select
-                value={String(selectedLocation?.penetrometer_serial ?? 1)}
-                onValueChange={async (value) => {
-                  const sn = Number(value);
-                  if (!locationId || !Number.isInteger(sn)) return;
-                  const token = await getAccessToken();
-                  const res = await fetch(`/api/psp/locations/${locationId}`, {
-                    method: "PATCH",
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({ penetrometerSerial: sn }),
-                  });
-                  if (res.ok) {
-                    setLocations((prev) =>
-                      prev.map((loc) =>
-                        loc.id === locationId
-                          ? { ...loc, penetrometer_serial: sn }
-                          : loc,
-                      ),
-                    );
-                  } else {
-                    const payload = await res.json();
-                    pushToast({
-                      type: "error",
-                      title: "Failed to update penetrometer",
-                      message: payload.error ?? "Unknown error",
-                    });
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 w-[72px] border-0 bg-transparent px-1 py-0 text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {(penetrometers.length
-                    ? penetrometers
-                    : [
-                        {
-                          id: "fallback",
-                          serial_number:
-                            selectedLocation?.penetrometer_serial ?? 1,
-                          sort_order: 0,
-                        },
-                      ]
-                  ).map((p) => (
-                    <SelectItem
-                      key={p.id}
-                      value={String(p.serial_number)}
-                      className="text-xs"
-                    >
-                      {p.serial_number}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 shrink-0 text-[var(--muted-foreground)]"
-                  >
-                    ⋮
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setPenetrometerAddOpen(true)}>
-                    Add new penetrometer
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      const current =
-                        selectedLocation?.penetrometer_serial ?? 1;
-                      const p = penetrometers.find(
-                        (x) => x.serial_number === current,
-                      );
-                      if (p && p.id !== "fallback") {
-                        setPenetrometerEditId(p.id);
-                        setPenetrometerEditInput(String(p.serial_number));
-                        setPenetrometerEditOpen(true);
-                      } else {
-                        pushToast({
-                          type: "info",
-                          title: "Edit penetrometer",
-                          message:
-                            "Select a penetrometer from the list or add a new one first.",
-                        });
-                      }
-                    }}
-                  >
-                    Edit
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <div className="psp-section-label">Layers</div>
           </div>
           <div className="space-y-3">
+            <div
+              className="rounded-[20px] bg-[var(--surface)] px-4 py-2 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+            >
+              <div className="flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                <span className="font-semibold">Penetrometer S/N:</span>
+                <Select
+                  value={String(selectedLocation?.penetrometer_serial ?? 1)}
+                  onValueChange={async (value) => {
+                    const sn = Number(value);
+                    if (!locationId || !Number.isInteger(sn)) return;
+                    const token = await getAccessToken();
+                    const res = await fetch(`/api/psp/locations/${locationId}`, {
+                      method: "PATCH",
+                      headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                      },
+                      body: JSON.stringify({ penetrometerSerial: sn }),
+                    });
+                    if (res.ok) {
+                      setLocations((prev) =>
+                        prev.map((loc) =>
+                          loc.id === locationId
+                            ? { ...loc, penetrometer_serial: sn }
+                            : loc,
+                        ),
+                      );
+                    } else {
+                      const payload = await res.json();
+                      pushToast({
+                        type: "error",
+                        title: "Failed to update penetrometer",
+                        message: payload.error ?? "Unknown error",
+                      });
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[72px] items-center justify-center border-0 bg-[#F7F9FB] px-1 py-0 text-center text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(penetrometers.length
+                      ? penetrometers
+                      : [
+                          {
+                            id: "fallback",
+                            serial_number:
+                              selectedLocation?.penetrometer_serial ?? 1,
+                            sort_order: 0,
+                          },
+                        ]
+                    ).map((p) => (
+                      <SelectItem
+                        key={p.id}
+                        value={String(p.serial_number)}
+                        className="text-xs"
+                      >
+                        {p.serial_number}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-auto size-8 shrink-0 text-[var(--muted-foreground)]"
+                    >
+                      ⋮
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => setPenetrometerAddOpen(true)}>
+                      Add new penetrometer
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        const current =
+                          selectedLocation?.penetrometer_serial ?? 1;
+                        const p = penetrometers.find(
+                          (x) => x.serial_number === current,
+                        );
+                        if (p && p.id !== "fallback") {
+                          setPenetrometerEditId(p.id);
+                          setPenetrometerEditInput(String(p.serial_number));
+                          setPenetrometerEditOpen(true);
+                        } else {
+                          pushToast({
+                            type: "info",
+                            title: "Edit penetrometer",
+                            message:
+                              "Select a penetrometer from the list or add a new one first.",
+                          });
+                        }
+                      }}
+                    >
+                      Edit
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
             <div className="grid gap-3">
               {[0, 1, 2].map((layerIndex) => (
                 <div
                   key={`layer-${layerIndex}`}
                   className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 >
-                  <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[var(--muted-foreground)]">
-                    <span>Layer {layerIndex + 1}</span>
-                    <span>Number of blows</span>
+                  <div className="mb-2 text-xs font-semibold text-[var(--muted-foreground)]">
+                    <span>Layer {layerIndex + 1} - Number of blows</span>
                   </div>
                   <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
                     {layerFields
@@ -738,10 +733,12 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
         </div>
 
         <div className="psp-outer">
-          <div className="mx-[6px] text-sm font-semibold">Signature</div>
+          <div className="psp-section-label">Signature</div>
 
           <Select value={siteInspector} onValueChange={setSiteInspector}>
-            <SelectTrigger className="psp-input mt-[14px] mb-[2px] mx-[2px] w-[calc(100%-4px)] bg-[var(--inner-bg)]">
+            <SelectTrigger
+              className={`psp-input mt-[14px] mb-[2px] w-full bg-[var(--inner-bg)] ${siteInspector ? "psp-select-inspector-filled" : ""}`}
+            >
               <SelectValue placeholder="Select inspector" />
             </SelectTrigger>
             <SelectContent>
@@ -753,7 +750,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             </SelectContent>
           </Select>
 
-          <div className="mt-[14px] mx-[2px] w-[calc(100%-4px)] space-y-2">
+          <div className="mt-[14px] w-full space-y-2">
             <div className="rounded-[12px] bg-[var(--inner-bg)] min-h-[180px] overflow-hidden relative flex flex-col">
               {signatureStrokes ? (
                 <div className="overflow-hidden">
@@ -777,7 +774,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                     onClick={() => setSignatureOpen(true)}
                     disabled={!siteInspector}
                   >
-                    Tap to Sign
+                    Tap to sign
                   </Button>
                 </div>
               )}
@@ -791,13 +788,18 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           </div>
         </div>
 
-        <div className="pt-0 text-[#51B58B]">
+        <div className="pt-0">
           <ConfirmButton
-            label={loading ? "Lodging..." : "Lodge Record"}
+            variant="ghost"
+            label={loading ? "Lodging..." : "Lodge record"}
             confirmLabel="CONFIRM?"
             onConfirm={handleLodge}
             disabled={!canSubmit || loading || duplicate}
-            className="psp-button w-full shrink-0 min-h-11 bg-[#51B58B] text-white hover:bg-[#51B58B]/90"
+            className="psp-button psp-button-lodge w-full shrink-0 min-h-11 text-white"
+            style={{
+              backgroundColor: "var(--psp-lodge-bg)",
+              color: "#fff",
+            }}
             confirmClassName="psp-button-warning"
           />
           {duplicate ? (
@@ -821,11 +823,6 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
             <DialogTitle>Admin sign-in</DialogTitle>
           </DialogHeader>
           <AuthPanel onAuthChange={setAuthEmail} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAdminAuthOpen(false)}>
-              Close
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -870,17 +867,20 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               min={1}
               value={penetrometerAddInput}
               onChange={(e) => setPenetrometerAddInput(e.target.value)}
-              className="psp-input"
+              onFocus={(e) => e.target.setSelectionRange(e.target.value.length, e.target.value.length)}
+              className="psp-input psp-input-dialog"
             />
           </div>
           <DialogFooter>
             <Button
               variant="outline"
+              className="bg-[#E6EDF3] border-[#E6EDF3] text-[var(--ink)] hover:bg-[#E6EDF3]/90"
               onClick={() => setPenetrometerAddOpen(false)}
             >
               Cancel
             </Button>
             <Button
+              className="bg-[#556F87] text-white hover:bg-[#556F87]/90"
               onClick={async () => {
                 const sn = Number(penetrometerAddInput);
                 if (!locationId || !Number.isInteger(sn) || sn < 1) {
@@ -952,7 +952,8 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
               min={1}
               value={penetrometerEditInput}
               onChange={(e) => setPenetrometerEditInput(e.target.value)}
-              className="psp-input"
+              onFocus={(e) => e.target.setSelectionRange(e.target.value.length, e.target.value.length)}
+              className="psp-input psp-input-dialog"
             />
           </div>
           <DialogFooter>
