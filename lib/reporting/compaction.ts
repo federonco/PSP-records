@@ -21,7 +21,6 @@ export type CompactionTemplateData = {
   REPORT_DATE?: string;
   SUPERVISOR_NAME?: string;
   WORK_LOCATION?: string;
-  PENETROMETER_SN?: string;
   records?: CompactionRecord[];
 };
 
@@ -72,7 +71,6 @@ function fillTemplateZip(zip: PizZip, payload: Record<string, string>) {
     "REPORT_DATE",
     "SUPERVISOR_NAME",
     "WORK_LOCATION",
-    "PENETROMETER_SN",
     "DATE",
     "CH",
     "L1_A",
@@ -86,7 +84,7 @@ function fillTemplateZip(zip: PizZip, payload: Record<string, string>) {
     "L3_C",
   ];
   const templateKeys = baseKeys.flatMap((key) => {
-    if (key === "REPORT_DATE" || key === "SUPERVISOR_NAME" || key === "WORK_LOCATION" || key === "PENETROMETER_SN") {
+    if (key === "REPORT_DATE" || key === "SUPERVISOR_NAME" || key === "WORK_LOCATION") {
       return [key];
     }
     return Array.from({ length: 10 }, (_, idx) => `${key}_${idx}`);
@@ -120,7 +118,6 @@ function buildTemplatePayload(input: CompactionTemplateData) {
     REPORT_DATE: input.REPORT_DATE ?? "",
     SUPERVISOR_NAME: input.SUPERVISOR_NAME ?? "",
     WORK_LOCATION: input.WORK_LOCATION ?? "",
-    PENETROMETER_SN: input.PENETROMETER_SN ?? "#3059-0325",
   };
 
   padded.forEach((rec, idx) => {

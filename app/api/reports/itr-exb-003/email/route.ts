@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import nodemailer from "nodemailer";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import {
+  createTransporter,
+  getSenderAddress,
+  buildHtmlBody,
+} from "@/lib/email";
 import { getHistoricalBlocksFromChainages } from "@/lib/psp-logic";
 import { getGoogleDocsClient, getGoogleDriveClient } from "@/app/lib/google/auth";
 import { isAdminEmail } from "@/lib/admin";
@@ -54,7 +58,6 @@ function buildMarkerMap(payload: {
   reportNum: number;
   workLocation: string;
   supervisorName: string;
-  penetrometerSn: string;
   records: ReportRecord[];
 }) {
   const markers: Record<string, string> = {
@@ -62,7 +65,6 @@ function buildMarkerMap(payload: {
     REPORT_NUMBER: String(payload.reportNum),
     WORK_LOCATION: payload.workLocation,
     SUPERVISOR_NAME: payload.supervisorName,
-    PENETROMETER_SN: payload.penetrometerSn,
   };
 
   const padded = Array.from({ length: 10 }, (_, idx) => payload.records[idx] ?? {});
@@ -88,42 +90,28 @@ async function resolveLocation(locationId: string | null, locationName: string |
   const supabase = getSupabaseServer({ useServiceRole: true });
   let resolvedLocationId = locationId ?? "";
   let resolvedLocationName = locationName ?? "";
-  let penetrometerSn = "#3059-0325";
 
   if (!resolvedLocationId && locationName) {
     const { data: locationRow, error } = await supabase
       .from("psp_locations")
-      .select("id,name,penetrometer_sn")
+      .select("id,name")
       .eq("name", locationName)
       .maybeSingle();
     if (error || !locationRow) return null;
     resolvedLocationId = locationRow.id;
     resolvedLocationName = locationRow.name;
-    penetrometerSn = locationRow.penetrometer_sn ?? "#3059-0325";
   }
 
   if (resolvedLocationId && !resolvedLocationName) {
     const { data: locationRow } = await supabase
       .from("psp_locations")
-      .select("name,penetrometer_sn")
+      .select("name")
       .eq("id", resolvedLocationId)
       .maybeSingle();
     resolvedLocationName = locationRow?.name ?? resolvedLocationId;
-    penetrometerSn = locationRow?.penetrometer_sn ?? "#3059-0325";
-  } else if (resolvedLocationId) {
-    const { data: locationRow } = await supabase
-      .from("psp_locations")
-      .select("penetrometer_sn")
-      .eq("id", resolvedLocationId)
-      .maybeSingle();
-    penetrometerSn = locationRow?.penetrometer_sn ?? "#3059-0325";
   }
 
-  return {
-    locationId: resolvedLocationId,
-    locationName: resolvedLocationName,
-    penetrometerSn,
-  };
+  return { locationId: resolvedLocationId, locationName: resolvedLocationName };
 }
 
 async function getEmailFromToken(request: NextRequest) {
@@ -138,10 +126,21 @@ async function getEmailFromToken(request: NextRequest) {
   return data.user?.email ?? null;
 }
 
+function getDefaultRecipient() {
+  const allowlist = process.env.ADMIN_EMAIL_ALLOWLIST;
+  const recipients = allowlist
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (recipients && recipients.length > 0) {
+    return recipients.join(", ");
+  }
+  return process.env.SMTP_USER || "";
+}
+
 async function generatePdfFromTemplate(params: {
   locationId: string;
   locationName: string;
-  penetrometerSn: string;
   reportNum: number;
   includeOpen: boolean;
 }) {
@@ -152,7 +151,7 @@ async function generatePdfFromTemplate(params: {
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { locationId, locationName, penetrometerSn, reportNum, includeOpen } = params;
+  const { locationId, locationName, reportNum, includeOpen } = params;
 
   const { data: chainageRows, error: chainageError } = await supabase
     .from("psp_records")
@@ -217,7 +216,6 @@ async function generatePdfFromTemplate(params: {
     reportNum,
     workLocation: locationName,
     supervisorName,
-    penetrometerSn,
     records: recordsPayload,
   });
 
@@ -280,6 +278,8 @@ export async function POST(request: NextRequest) {
   const includeOpen = Boolean(body.includeOpen);
   const locationId = (body.location_id ?? body.locationId ?? null) as string | null;
   const locationName = (body.location_name ?? body.locationName ?? null) as string | null;
+  const toEmail = (body.toEmail ?? null) as string | null;
+
   if (Number.isNaN(reportNum)) {
     return NextResponse.json({ error: "Missing reportNum" }, { status: 400 });
   }
@@ -303,14 +303,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpFrom = process.env.SMTP_FROM;
-  if (!smtpHost || !smtpPort || !smtpUser || !smtpPass || !smtpFrom) {
+  const pass = process.env.SMTP_PASS || process.env.RESEND_API_KEY;
+  if (!pass) {
     return NextResponse.json(
-      { error: "SMTP environment variables are missing" },
+      { error: "SMTP_PASS or RESEND_API_KEY is required" },
       { status: 500 },
     );
   }
@@ -319,27 +315,26 @@ export async function POST(request: NextRequest) {
     const { buffer, block } = await generatePdfFromTemplate({
       locationId: resolved.locationId,
       locationName: resolved.locationName,
-      penetrometerSn: resolved.penetrometerSn,
       reportNum,
       includeOpen,
     });
     const safeLocation = resolved.locationName.replace(/\s+/g, "-");
-    const recipient = adminEmail;
+    const recipient = toEmail || getDefaultRecipient();
+    if (!recipient) {
+      return NextResponse.json({ error: "Missing email recipient" }, { status: 400 });
+    }
 
     const pending = block.status === "OPEN" ? block.pending.join(", ") : "";
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: Number.parseInt(smtpPort, 10),
-      secure: Number.parseInt(smtpPort, 10) === 465,
-      auth: { user: smtpUser, pass: smtpPass },
-    });
+    const textBody = `Location: ${resolved.locationName}\nReport #: ${reportNum}\n${
+      pending ? `Pending CH: ${pending}\n` : ""
+    }`;
+    const transporter = createTransporter();
     await transporter.sendMail({
-      from: smtpFrom,
+      from: getSenderAddress(),
       to: recipient,
       subject: `PSP Record - ${resolved.locationName} - Rep #${reportNum}`,
-      text: `Location: ${resolved.locationName}\nReport #: ${reportNum}\n${
-        pending ? `Pending CH: ${pending}\n` : ""
-      }`,
+      text: textBody,
+      html: buildHtmlBody(textBody),
       attachments: [
         {
           filename: `ITR-EXB-003_${safeLocation}_Rep${reportNum}.pdf`,
