@@ -14,6 +14,7 @@
    height?: number;
    onSave: (payload: SignatureStrokes) => void;
    onCancel: () => void;
+   wrapperClassName?: string;
  };
 
  export function SignaturePad({
@@ -21,6 +22,7 @@
    height = 180,
    onSave,
    onCancel,
+   wrapperClassName,
  }: SignaturePadProps) {
    const canvasRef = useRef<HTMLCanvasElement | null>(null);
    const [strokes, setStrokes] = useState<SignatureStrokes["strokes"]>([]);
@@ -100,7 +102,7 @@
 
    return (
      <div className="space-y-3">
-       <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-2)] p-2">
+       <div className={`rounded-[12px] border border-[var(--border)] p-2 ${wrapperClassName ?? "bg-[var(--surface-2)]"}`}>
          <canvas
            ref={canvasRef}
            width={size.w}
@@ -122,15 +124,15 @@
          >
            Clear
          </Button>
-         <Button
-           type="button"
-           size="sm"
-           className="psp-button psp-button-primary h-10 px-4 text-xs"
-           onClick={handleSave}
-           disabled={strokes.length === 0}
-         >
-           Save
-         </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="psp-button h-10 px-4 text-xs bg-[#556F87] text-white hover:bg-[#556F87]/90"
+          onClick={handleSave}
+          disabled={strokes.length === 0}
+        >
+          Save
+        </Button>
          <Button
            type="button"
            variant="ghost"

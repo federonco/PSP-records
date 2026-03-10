@@ -1,6 +1,7 @@
  "use client";
 
  import { useEffect, useState } from "react";
+ import Link from "next/link";
  import { getSupabaseBrowser } from "@/lib/supabase/browser";
  import { useToast } from "@/components/toast";
  import { Button } from "@/components/ui/button";
@@ -95,16 +96,10 @@
 
    if (currentEmail) {
      return (
-     <div className="flex items-center justify-between gap-3 rounded-[12px] bg-[var(--surface-2)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+     <div className="psp-auth-signed-in-row flex items-end justify-between gap-3 text-xs text-[var(--muted-foreground)]">
          <span>Signed in as {currentEmail}</span>
-        <Button
-          type="button"
-          onClick={handleSignOut}
-          variant="ghost"
-          size="sm"
-          className="psp-button psp-button-ghost h-9 text-xs"
-        >
-          Sign out
+        <Button asChild variant="ghost" size="sm" className="psp-button psp-button-ghost h-9 text-xs">
+          <Link href="/">Back to user</Link>
         </Button>
        </div>
      );
@@ -148,14 +143,14 @@
          Sign in
        </p>
        <Input
-         className="psp-input h-9 text-[16px] md:text-xs"
+         className="psp-input psp-input-auth h-9 text-[16px] md:text-xs"
          value={email}
          onChange={(event) => setEmail(event.target.value)}
          placeholder="Email"
          type="email"
        />
        <Input
-         className="psp-input h-9 text-[16px] md:text-xs"
+         className="psp-input psp-input-auth h-9 text-[16px] md:text-xs"
          value={password}
          onChange={(event) => setPassword(event.target.value)}
          placeholder="Password"
@@ -163,7 +158,7 @@
        />
        <Button
          type="button"
-         className="psp-button psp-button-primary h-9 text-xs"
+         className="psp-button psp-auth-sign-in-btn h-9 text-xs"
          onClick={handleSignIn}
          disabled={loading || !email || !password}
        >

@@ -11,8 +11,9 @@
    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
    if (!url || !anonKey) {
-     throw new Error("Missing Supabase environment variables");
-   }
+    console.warn("Supabase env vars missing. Running in UI mode (no backend).");
+    return createClient("http://localhost", "public-anon-key");
+  }
 
    client = createClient(url, anonKey, {
      auth: {

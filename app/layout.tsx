@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Mono, Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { Manrope } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
@@ -10,22 +10,10 @@ export const viewport: Viewport = {
   userScalable: false,
 };
 
-const displayFont = Plus_Jakarta_Sans({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-});
-
-const bodyFont = Inter({
+const manrope = Manrope({
   variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-});
-
-const codeFont = DM_Mono({
-  variable: "--font-code",
-  subsets: ["latin"],
-  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -41,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${displayFont.variable} ${bodyFont.variable} ${codeFont.variable} antialiased`}
+        className={`${manrope.variable} antialiased`}
       >
         <Providers>
           <div className="flex min-h-screen flex-col">
@@ -53,12 +41,12 @@ export default function RootLayout({
                 href="https://www.readx.com.au"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1 align-middle -translate-y-[2px]"
+                className="inline-flex items-center gap-1 align-middle -translate-y-[1px]"
               >
                 <img
-                  src="https://github.com/federonco/readx-assets/blob/main/readX%20orange.png?raw=true"
+                  src="/readx.png"
                   alt="readX"
-                  className="h-2.5"
+                  className="h-2.5 w-auto"
                 />
                 <sup className="text-[8px]">TM</sup>
               </a>{" "}
