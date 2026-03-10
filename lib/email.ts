@@ -10,19 +10,29 @@ export function getTransporterConfig() {
   return { host, port, user, pass, secure };
 }
 
-/** Sender fallback: SMTP_FROM || ALERT_FROM_EMAIL || Water Cart */
+/** Sender: use SMTP_FROM (set in Vercel). Fallback for local dev. */
 export function getSenderAddress(): string {
   return (
     process.env.SMTP_FROM ||
-    process.env.ALERT_FROM_EMAIL ||
-    "Water Cart <info@readx.com.au>"
+    "OnSite-B <info@readx.com.au>"
   );
+}
+
+/** Base URL for public assets (emails need absolute URLs) */
+function getPublicAssetUrl(path: string): string {
+  const base = process.env.NEXT_PUBLIC_SITE_URL;
+  if (base) {
+    return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}/${path.replace(/^\//, "")}`;
+  }
+  return `https://apa-dashboard.readx.com.au/${path.replace(/^\//, "")}`;
 }
 
 /** readX HTML email signature — second line: Drainer - OnSite-B */
 export function getReadxSignatureHtml(): string {
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://www.readx.com.au";
+  const logoUrl = getPublicAssetUrl("readx-logo.png");
   return `
 <div style="font-family: Arial, sans-serif; color: #333; padding: 24px;">
   <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 32px 0;" />
@@ -30,7 +40,7 @@ export function getReadxSignatureHtml(): string {
     <tr>
       <td style="padding-right: 16px; vertical-align: middle;">
         <a href="https://www.readx.com.au" target="_blank">
-          <img src="${siteUrl}/readx-logo.png" alt="readX" width="80" />
+          <img src="${logoUrl}" alt="readX" width="80" />
         </a>
       </td>
       <td style="vertical-align: middle; border-left: 2px solid #1a5276; padding-left: 16px;">
