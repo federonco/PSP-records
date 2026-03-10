@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
 
   const compactorSnValue =
     compactorSn !== undefined && compactorSn !== null && compactorSn !== ""
-      ? Number(compactorSn)
+      ? String(compactorSn).trim()
       : null;
 
   const { error } = await supabase
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       location_name: locationName ?? null,
       section_id: sectionId ?? null,
       site_inspector: siteInspector,
-      compactor_sn: Number.isFinite(compactorSnValue) ? compactorSnValue : null,
+      compactor_sn: compactorSnValue || null,
       ...layerPayload,
     })
     .eq("id", existing.id);

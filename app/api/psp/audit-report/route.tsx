@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Document, Page, Path, StyleSheet, Svg, Text, View, pdf } from "@react-pdf/renderer";
-import nodemailer from "nodemailer";
 import { getUserFromRequest } from "@/lib/api-auth";
+import {
+  createTransporter,
+  getSenderAddress,
+  buildHtmlBody,
+} from "@/lib/email";
 import { isAdminEmail } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -228,18 +232,15 @@ export async function POST(request: NextRequest) {
   );
 
   const buffer = (await pdf(doc).toBuffer()) as unknown as Buffer;
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpPort = process.env.SMTP_PORT;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpFrom = process.env.SMTP_FROM;
-  if (!smtpHost || !smtpPort || !smtpUser || !smtpPass || !smtpFrom) {
+  const pass = process.env.SMTP_PASS || process.env.RESEND_API_KEY;
+  if (!pass) {
     return NextResponse.json(
-      { error: "SMTP environment variables are missing" },
+      { error: "SMTP_PASS or RESEND_API_KEY is required" },
       { status: 500 },
     );
   }
 
+  const smtpUser = process.env.SMTP_USER || "resend";
   const recipients = process.env.ADMIN_EMAIL_ALLOWLIST?.split(",")
     .map((item) => item.trim())
     .filter(Boolean);
@@ -249,19 +250,16 @@ export async function POST(request: NextRequest) {
   }
 
   const safeLocation = (locationName ?? "location").replace(/\s+/g, "-");
-  const transporter = nodemailer.createTransport({
-    host: smtpHost,
-    port: Number.parseInt(smtpPort, 10),
-    secure: Number.parseInt(smtpPort, 10) === 465,
-    auth: { user: smtpUser, pass: smtpPass },
-  });
+  const textBody = `Location: ${locationName ?? locationId}\nRecords: ${
+    records?.length ?? 0
+  }`;
+  const transporter = createTransporter();
   await transporter.sendMail({
-    from: smtpFrom,
+    from: getSenderAddress(),
     to,
     subject: `PSP Audit - ${locationName ?? locationId}`,
-    text: `Location: ${locationName ?? locationId}\nRecords: ${
-      records?.length ?? 0
-    }`,
+    text: textBody,
+    html: buildHtmlBody(textBody),
     attachments: [
       {
         filename: `PSP-Audit_${safeLocation}.pdf`,

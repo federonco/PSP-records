@@ -104,6 +104,10 @@ type CompactionReportRow = {
   const [penetrometerInput, setPenetrometerInput] = useState("1");
   const [editRecordOpen, setEditRecordOpen] = useState(false);
   const [editRecordChainage, setEditRecordChainage] = useState("");
+  const [sendPdfModalOpen, setSendPdfModalOpen] = useState(false);
+  const [sendPdfReport, setSendPdfReport] = useState<CompactionReportRow | null>(null);
+  const [sendPdfEmail, setSendPdfEmail] = useState("");
+  const [sendPdfLoading, setSendPdfLoading] = useState(false);
   const getAccessToken = async () => {
     const { data } = await supabase.auth.getSession();
     if (data.session?.access_token) {
@@ -346,7 +350,19 @@ type CompactionReportRow = {
     return { required, pending, percent };
   }, [compactionSummary.ready, locationRequirement]);
 
-  const handleSendPdf = async (report: CompactionReportRow) => {
+  const openSendPdfModal = async (report: CompactionReportRow) => {
+    setSendPdfReport(report);
+    setSendPdfModalOpen(true);
+    try {
+      const res = await fetch("/api/config");
+      const config = await res.json();
+      setSendPdfEmail(config.reportDefaultEmail ?? "");
+    } catch {
+      setSendPdfEmail("");
+    }
+  };
+
+  const handleSendPdf = async (report: CompactionReportRow, recipientEmail: string) => {
     if (!report.block_index) {
       pushToast({
         type: "error",
@@ -363,6 +379,15 @@ type CompactionReportRow = {
       });
       return;
     }
+    const trimmed = recipientEmail.trim();
+    if (!trimmed) {
+      pushToast({
+        type: "error",
+        title: "Send failed",
+        message: "Please enter a recipient email address.",
+      });
+      return;
+    }
     const token = await getAccessToken();
     if (!token) {
       pushToast({
@@ -372,6 +397,7 @@ type CompactionReportRow = {
       });
       return;
     }
+    setSendPdfLoading(true);
     const response = await fetch("/api/reports/itr-exb-003/email", {
       method: "POST",
       headers: {
@@ -383,9 +409,13 @@ type CompactionReportRow = {
         location_name: locationName,
         reportNum: report.block_index,
         includeOpen: true,
+        recipientEmail: trimmed,
       }),
     });
     const payload = await response.json();
+    setSendPdfLoading(false);
+    setSendPdfModalOpen(false);
+    setSendPdfReport(null);
     if (!response.ok) {
       pushToast({
         type: "error",
@@ -397,8 +427,15 @@ type CompactionReportRow = {
     pushToast({
       type: "success",
       title: "Report sent",
-      message: "The PDF was emailed to the admin account.",
+      message: `The PDF was emailed to ${trimmed}.`,
     });
+  };
+
+  const isValidEmail = (email: string) => {
+    const trimmed = email.trim();
+    if (!trimmed) return false;
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(trimmed);
   };
 
   const handleAuditReportAll = async () => {
@@ -598,54 +635,12 @@ type CompactionReportRow = {
     setLocationModalOpen(true);
   };
 
-  const handleCompactionReport = async (block: BlockInfo) => {
-    setLoading(true);
-    const token = await getAccessToken();
-    if (!token) {
-      setLoading(false);
-      pushToast({
-        type: "error",
-        title: "Sign in required",
-        message: "Authenticate before generating reports.",
-      });
-      return;
-    }
-    const response = await fetch("/api/psp/compaction-report", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        locationId,
-        locationName,
-        chainages: block.expected,
-      }),
+  const handleCompactionReport = (block: BlockInfo) => {
+    const params = new URLSearchParams({
+      location_id: locationId,
+      reportNum: String(block.index),
     });
-    setLoading(false);
-
-    if (!response.ok) {
-      const payload = await response.json();
-      pushToast({
-        type: "error",
-        title: "Report failed",
-        message: payload.error ?? "Unable to generate report",
-      });
-      return;
-    }
-
-    const blob = await response.blob();
-    const disposition = response.headers.get("Content-Disposition") ?? "";
-    const match = disposition.match(/filename="([^"]+)"/);
-    const filename = match ? match[1] : "compaction-report.pdf";
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+    window.open(`/reports/compaction-preview?${params.toString()}`, "_blank", "noopener,noreferrer");
   };
 
   const handleSaveLocation = async () => {
@@ -982,6 +977,18 @@ type CompactionReportRow = {
                           style={{ width: `${progressPercent}%` }}
                         />
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
+                          report.status === "OPEN"
+                            ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
+                            : "bg-[#16a34a]"
+                        }`}
+                        onClick={() => openSendPdfModal(report)}
+                      >
+                        Send PDF
+                      </Button>
                     </div>
                   ) : null}
                 </div>
@@ -1007,6 +1014,43 @@ type CompactionReportRow = {
 </div>
 
       </div>
+
+      <Dialog open={sendPdfModalOpen} onOpenChange={setSendPdfModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send report</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <label className="psp-label">Send report to:</label>
+            <Input
+              type="email"
+              className="psp-input min-h-[44px]"
+              placeholder="recipient@example.com"
+              value={sendPdfEmail}
+              onChange={(e) => setSendPdfEmail(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="min-h-[44px] min-w-[44px]"
+              onClick={() => {
+                setSendPdfModalOpen(false);
+                setSendPdfReport(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="psp-button psp-button-primary min-h-[44px] min-w-[44px] px-4"
+              onClick={() => sendPdfReport && handleSendPdf(sendPdfReport, sendPdfEmail)}
+              disabled={!sendPdfReport || sendPdfLoading || !isValidEmail(sendPdfEmail)}
+            >
+              {sendPdfLoading ? "Sending…" : "Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={locationModalOpen} onOpenChange={setLocationModalOpen}>
         <DialogContent className="psp-dialog-location !bg-[#F7F9FB] !text-[#6b7280]" data-dialog="location">
