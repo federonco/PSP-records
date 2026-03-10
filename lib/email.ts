@@ -35,7 +35,7 @@ export function getReadxSignatureHtml(): string {
       </td>
       <td style="vertical-align: middle; border-left: 2px solid #1a5276; padding-left: 16px;">
         <p style="margin:0; font-size: 15px; font-weight: bold; color: #1a5276;">readX Team</p>
-        <p style="margin:4px 0 0; font-size: 13px; color: #555;">Drainer - OnSite-B</p>
+        <p style="margin:4px 0 0; font-size: 13px; color: #555;">Backfill - OnSite-B</p>
         <p style="margin:4px 0 0; font-size: 12px;">
           <a href="https://www.readx.com.au" target="_blank" style="color: #1a5276; text-decoration: none;">www.readX.com.au</a>
         </p>

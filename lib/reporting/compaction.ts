@@ -21,6 +21,9 @@ export type CompactionTemplateData = {
   REPORT_DATE?: string;
   SUPERVISOR_NAME?: string;
   WORK_LOCATION?: string;
+  PROJECT_NAME?: string;
+  PROJECT_NUMBER?: string;
+  PENETROMETER_SN?: string;
   records?: CompactionRecord[];
 };
 

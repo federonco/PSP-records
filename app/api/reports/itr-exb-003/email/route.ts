@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
+import puppeteer from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   createTransporter,
@@ -6,24 +9,73 @@ import {
   buildHtmlBody,
 } from "@/lib/email";
 import { getHistoricalBlocksFromChainages } from "@/lib/psp-logic";
-import { getGoogleDocsClient, getGoogleDriveClient } from "@/app/lib/google/auth";
+import { renderCompactionHTML } from "@/lib/reports/compaction-html";
+import type { CompactionTemplateData } from "@/lib/reporting/compaction";
 import { isAdminEmail } from "@/lib/admin";
 
 export const runtime = "nodejs";
 
-type ReportRecord = {
-  date: string;
-  ch: string | number;
-  l1_a: string | number;
-  l1_b: string | number;
-  l1_c: string | number;
-  l2_a: string | number;
-  l2_b: string | number;
-  l2_c: string | number;
-  l3_a: string | number;
-  l3_b: string | number;
-  l3_c: string | number;
-};
+async function getBrowser() {
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: { width: 1200, height: 900 },
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+  } else {
+    const localChromePaths = [
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      process.env.CHROME_PATH,
+      process.env.CHROME_EXECUTABLE_PATH,
+    ].filter(Boolean) as string[];
+
+    const executablePath = localChromePaths.find((p) => {
+      try {
+        fs.accessSync(p);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+
+    if (!executablePath) {
+      throw new Error(
+        "Chrome not found for local PDF generation. " +
+          "Install Google Chrome or set CHROME_PATH env var to your Chrome executable path.",
+      );
+    }
+
+    return puppeteer.launch({
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      defaultViewport: { width: 1200, height: 900 },
+      executablePath,
+      headless: true,
+    });
+  }
+}
+
+async function generateCompactionPdfFromHTML(data: CompactionTemplateData) {
+  const html = renderCompactionHTML(data);
+
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setContent(html, { waitUntil: "networkidle0" });
+
+  const pdfBuffer = await page.pdf({
+    format: "A4",
+    printBackground: true,
+    margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+  });
+
+  await browser.close();
+  return {
+    buffer: Buffer.from(pdfBuffer),
+    contentType: "application/pdf",
+    fileName: `ITR-EXB-003_${Date.now()}.pdf`,
+  };
+}
 
 function formatDatePerth(value?: string | null) {
   if (!value) return "";
@@ -37,52 +89,12 @@ function formatDatePerth(value?: string | null) {
   return formatter.format(date);
 }
 
-function extractGoogleErrorMessage(error: unknown) {
+function extractErrorMessage(error: unknown) {
   if (error && typeof error === "object") {
-    const anyError = error as { message?: string; response?: { data?: any; status?: number } };
-    const apiMessage =
-      anyError.response?.data?.error?.message ||
-      anyError.response?.data?.message ||
-      anyError.message;
-    const status = anyError.response?.status;
-    if (apiMessage && status) {
-      return `${apiMessage} (status ${status})`;
-    }
-    if (apiMessage) return apiMessage;
+    const anyError = error as { message?: string };
+    return anyError.message ?? "Email failed";
   }
   return "Email failed";
-}
-
-function buildMarkerMap(payload: {
-  reportDate: string;
-  reportNum: number;
-  workLocation: string;
-  supervisorName: string;
-  records: ReportRecord[];
-}) {
-  const markers: Record<string, string> = {
-    REPORT_DATE: payload.reportDate,
-    REPORT_NUMBER: String(payload.reportNum),
-    WORK_LOCATION: payload.workLocation,
-    SUPERVISOR_NAME: payload.supervisorName,
-  };
-
-  const padded = Array.from({ length: 10 }, (_, idx) => payload.records[idx] ?? {});
-  padded.forEach((rec, idx) => {
-    markers[`DATE_${idx}`] = rec.date ? String(rec.date) : "";
-    markers[`CH_${idx}`] = rec.ch !== undefined ? String(rec.ch) : "";
-    markers[`L1_A_${idx}`] = rec.l1_a !== undefined ? String(rec.l1_a) : "";
-    markers[`L1_B_${idx}`] = rec.l1_b !== undefined ? String(rec.l1_b) : "";
-    markers[`L1_C_${idx}`] = rec.l1_c !== undefined ? String(rec.l1_c) : "";
-    markers[`L2_A_${idx}`] = rec.l2_a !== undefined ? String(rec.l2_a) : "";
-    markers[`L2_B_${idx}`] = rec.l2_b !== undefined ? String(rec.l2_b) : "";
-    markers[`L2_C_${idx}`] = rec.l2_c !== undefined ? String(rec.l2_c) : "";
-    markers[`L3_A_${idx}`] = rec.l3_a !== undefined ? String(rec.l3_a) : "";
-    markers[`L3_B_${idx}`] = rec.l3_b !== undefined ? String(rec.l3_b) : "";
-    markers[`L3_C_${idx}`] = rec.l3_c !== undefined ? String(rec.l3_c) : "";
-  });
-
-  return markers;
 }
 
 async function resolveLocation(locationId: string | null, locationName: string | null) {
@@ -126,30 +138,13 @@ async function getEmailFromToken(request: NextRequest) {
   return data.user?.email ?? null;
 }
 
-function getDefaultRecipient() {
-  const allowlist = process.env.ADMIN_EMAIL_ALLOWLIST;
-  const recipients = allowlist
-    ?.split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-  if (recipients && recipients.length > 0) {
-    return recipients.join(", ");
-  }
-  return process.env.SMTP_USER || "";
-}
 
-async function generatePdfFromTemplate(params: {
+async function generateITRExb003Pdf(params: {
   locationId: string;
   locationName: string;
   reportNum: number;
   includeOpen: boolean;
 }) {
-  const templateId = process.env.GOOGLE_DOC_TEMPLATE_ID;
-  const driveFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-  if (!templateId || !driveFolderId) {
-    throw new Error("Missing Google template configuration");
-  }
-
   const supabase = getSupabaseServer({ useServiceRole: true });
   const { locationId, locationName, reportNum, includeOpen } = params;
 
@@ -185,7 +180,7 @@ async function generatePdfFromTemplate(params: {
   });
 
   const reportDate = formatDatePerth(new Date().toISOString());
-  const recordsPayload: ReportRecord[] = block.expected.map((chainage) => {
+  const recordsPayload = block.expected.map((chainage) => {
     const record = recordMap.get(chainage);
     return {
       date: record?.recorded_at ? formatDatePerth(record.recorded_at) : "",
@@ -211,65 +206,16 @@ async function generatePdfFromTemplate(params: {
     }
   }
 
-  const markers = buildMarkerMap({
-    reportDate,
-    reportNum,
-    workLocation: locationName,
-    supervisorName,
+  const templateData: CompactionTemplateData = {
+    REPORT_DATE: reportDate,
+    SUPERVISOR_NAME: supervisorName,
+    WORK_LOCATION: locationName,
     records: recordsPayload,
-  });
+  };
 
-  const drive = getGoogleDriveClient();
-  const docs = getGoogleDocsClient();
-  let copiedFileId: string | null = null;
-
-  try {
-    console.log("ITR template ID", templateId);
-    console.log("Drive folder ID", driveFolderId);
-    const copyResponse = await drive.files.copy({
-      fileId: templateId,
-      requestBody: {
-        name: `ITR-EXB-003_${locationName}_Rep${reportNum}_${Date.now()}`,
-        parents: [driveFolderId],
-      },
-      supportsAllDrives: true,
-    }).catch((err) => {
-      console.log("Copy error full", JSON.stringify(err?.response?.data, null, 2));
-      throw err;
-    });
-    copiedFileId = copyResponse.data.id ?? null;
-    if (copiedFileId) {
-      console.log("ITR template copy", {
-        copiedFileId,
-        url: `https://docs.google.com/document/d/${copiedFileId}/edit`,
-      });
-    }
-    if (!copiedFileId) throw new Error("Failed to copy template");
-
-    const requests = Object.entries(markers).map(([key, value]) => ({
-      replaceAllText: {
-        containsText: { text: `{{${key}}}`, matchCase: true },
-        replaceText: value ?? "",
-      },
-    }));
-    await docs.documents.batchUpdate({
-      documentId: copiedFileId,
-      requestBody: { requests },
-    });
-
-    const exportResponse = await drive.files.export(
-      { fileId: copiedFileId, mimeType: "application/pdf" },
-      { responseType: "arraybuffer" },
-    );
-    const buffer = Buffer.from(exportResponse.data as ArrayBuffer);
-    return { buffer, block };
-  } finally {
-    if (copiedFileId) {
-      await drive.files
-        .delete({ fileId: copiedFileId, supportsAllDrives: true })
-        .catch(() => null);
-    }
-  }
+  const result = await generateCompactionPdfFromHTML(templateData);
+  const pdfBuffer = result.buffer;
+  return { buffer: pdfBuffer, block };
 }
 
 export async function POST(request: NextRequest) {
@@ -278,7 +224,8 @@ export async function POST(request: NextRequest) {
   const includeOpen = Boolean(body.includeOpen);
   const locationId = (body.location_id ?? body.locationId ?? null) as string | null;
   const locationName = (body.location_name ?? body.locationName ?? null) as string | null;
-  const toEmail = (body.toEmail ?? null) as string | null;
+  const recipientEmail = (body.recipientEmail ?? body.toEmail ?? null) as string | null;
+  const recipient = recipientEmail?.trim() || process.env.REPORT_DEFAULT_EMAIL?.trim() || null;
 
   if (Number.isNaN(reportNum)) {
     return NextResponse.json({ error: "Missing reportNum" }, { status: 400 });
@@ -312,16 +259,18 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { buffer, block } = await generatePdfFromTemplate({
+    const { buffer, block } = await generateITRExb003Pdf({
       locationId: resolved.locationId,
       locationName: resolved.locationName,
       reportNum,
       includeOpen,
     });
     const safeLocation = resolved.locationName.replace(/\s+/g, "-");
-    const recipient = toEmail || getDefaultRecipient();
     if (!recipient) {
-      return NextResponse.json({ error: "Missing email recipient" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing email recipient. Provide recipientEmail in the request body or set REPORT_DEFAULT_EMAIL." },
+        { status: 400 },
+      );
     }
 
     const pending = block.status === "OPEN" ? block.pending.join(", ") : "";
@@ -338,7 +287,7 @@ export async function POST(request: NextRequest) {
       attachments: [
         {
           filename: `ITR-EXB-003_${safeLocation}_Rep${reportNum}.pdf`,
-          content: buffer,
+          content: buffer as unknown as Buffer,
           contentType: "application/pdf",
         },
       ],
@@ -346,9 +295,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true, message: "Email sent" });
   } catch (error) {
-    console.error("ITR Google template email failed", error);
+    console.error("ITR-EXB-003 email failed", error);
     return NextResponse.json(
-      { error: extractGoogleErrorMessage(error) },
+      { error: extractErrorMessage(error) },
       { status: 500 },
     );
   }
