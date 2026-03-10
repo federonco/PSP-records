@@ -1001,7 +1001,7 @@ type CompactionReportRow = {
                       ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
                       : "bg-[#16a34a]"
                   }`}
-                  onClick={() => handleSendPdf(report)}
+                  onClick={() => openSendPdfModal(report)}
                 >
                   Send PDF
                 </Button>

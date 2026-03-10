@@ -27,6 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -724,8 +725,8 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 </div>
               ))}
             </div>
-          </div>
-        </div>
+          </CardHeader>
+        </Card>
 
         <div className="psp-outer">
           <div className="psp-section-label">Signature</div>
