@@ -877,10 +877,10 @@ type CompactionReportRow = {
               {selectedLocation.name}
             </p>
             <div className="flex gap-2 text-xs">
-              <Badge className="rounded-full bg-[#556F87] px-2 py-0.5 text-[10px] font-semibold text-white">
+              <Badge className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-semibold text-white">
                 Ready {compactionSummary.ready}
               </Badge>
-              <Badge className="rounded-full bg-[#AAB4BE] px-2 py-0.5 text-[10px] font-semibold text-white">
+              <Badge className="rounded-full bg-[#f59e0b] px-2 py-0.5 text-[10px] font-semibold text-white">
                 Open {compactionSummary.open}
               </Badge>
               <Button
@@ -955,7 +955,7 @@ type CompactionReportRow = {
                       className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
                         report.status === "READY"
                           ? "bg-[#16a34a]"
-                          : "bg-[var(--neutral)]"
+                          : "bg-[#f59e0b]"
                       }`}
                     >
                       {report.status === "READY" ? "READY" : "OPEN"}
@@ -980,18 +980,6 @@ type CompactionReportRow = {
                           style={{ width: `${progressPercent}%` }}
                         />
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
-                          report.status === "OPEN"
-                            ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
-                            : "bg-[#16a34a]"
-                        }`}
-                        onClick={() => openSendPdfModal(report)}
-                      >
-                        Send PDF
-                      </Button>
                     </div>
                   ) : null}
                 </div>
@@ -999,11 +987,7 @@ type CompactionReportRow = {
                 <Button
                   variant="outline"
                   size="sm"
-                  className={`h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(22,163,74,0.35)] ${
-                    report.status === "OPEN"
-                      ? "bg-[#f59e0b] shadow-[0_4px_14px_rgba(245,158,11,0.35)]"
-                      : "bg-[#16a34a]"
-                  }`}
+                  className="h-9 px-4 text-xs border-0 text-white shadow-[0_4px_14px_rgba(85,111,135,0.35)] bg-[#556F87] hover:bg-[#556F87]/90"
                   onClick={() => openSendPdfModal(report)}
                 >
                   Send PDF

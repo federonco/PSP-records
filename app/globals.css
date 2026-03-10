@@ -274,7 +274,7 @@ body {
 
   .psp-card {
     @apply rounded-[var(--radius)] px-6 py-6;
-    background: var(--card-bg);
+    background: var(--card-bg) !important;
     border: 1px solid var(--card-border);
     box-shadow: none;
   }
@@ -534,10 +534,10 @@ header.psp-header .psp-header-title-wrap {
   margin-bottom: calc(-1 * (var(--card-padding) - (var(--card-padding) * 0.25)));
 }
 
-/* Home y Admin header cards: mismo color de fondo */
+/* Home y Admin header cards: mismo color que psp-outer y psp-card */
 header.psp-outer,
 header.psp-header {
-  background: #D1DEE9 !important;
+  background: var(--card-bg) !important;
 }
 
 /* Header admin: altura +15% solo por abajo (margen superior del título sin cambios) */

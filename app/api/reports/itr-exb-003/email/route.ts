@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
+import chromium from "@sparticuz/chromium-min";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   createTransporter,
@@ -14,13 +14,18 @@ import type { CompactionTemplateData } from "@/lib/reporting/compaction";
 import { isAdminEmail } from "@/lib/admin";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
+
+const CHROMIUM_PACK_URL =
+  "https://github.com/Sparticuz/chromium/releases/download/v143.0.4/chromium-v143.0.4-pack.x64.tar";
 
 async function getBrowser() {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    const executablePath = await chromium.executablePath(CHROMIUM_PACK_URL);
     return puppeteer.launch({
       args: chromium.args,
       defaultViewport: { width: 1200, height: 900 },
-      executablePath: await chromium.executablePath(),
+      executablePath,
       headless: true,
     });
   } else {
