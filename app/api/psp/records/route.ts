@@ -26,11 +26,10 @@ import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
-  const { error } = await supabase.from("psp_records").upsert(
-    {
-      location_id: resolvedLocationId,
-      location_name: validation.clean.locationName ?? null,
-      section_id: validation.clean.sectionId ?? null,
+const { error } = await supabase.from("psp_records").upsert(
+  {
+    location_id: resolvedLocationId,
+    section_id: validation.clean.sectionId ?? null,
       chainage: validation.clean.chainage,
       site_inspector: validation.clean.siteInspector,
       compactor_sn: validation.clean.compactorSn ?? null,
