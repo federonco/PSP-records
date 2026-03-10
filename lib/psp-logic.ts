@@ -41,8 +41,9 @@ export async function resolveLocationId({
     ? getSupabaseServer({ accessToken })
     : getSupabaseServer({ useServiceRole: true });
   const { data, error } = await supabase
-    .from("psp_locations")
+    .from("locations")
     .select("id")
+    .eq("location_type", "psp")
     .eq("name", locationName)
     .maybeSingle();
 

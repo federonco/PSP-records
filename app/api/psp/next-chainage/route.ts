@@ -37,8 +37,9 @@ export async function GET(request: NextRequest) {
    }
 
   const { data: locationRow } = await supabase
-    .from("psp_locations")
+    .from("locations")
     .select("direction,start_chainage")
+    .eq("location_type", "psp")
     .eq("id", resolvedLocationId)
     .maybeSingle();
 

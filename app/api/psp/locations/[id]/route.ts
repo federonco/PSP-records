@@ -30,8 +30,9 @@ export async function PATCH(
     : getSupabaseServer({ useServiceRole: true });
 
   const { data, error } = await supabase
-    .from("psp_locations")
+    .from("locations")
     .update({ penetrometer_sn: sn || null })
+    .eq("location_type", "psp")
     .eq("id", id)
     .select("id,penetrometer_sn")
     .single();

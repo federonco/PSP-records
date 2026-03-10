@@ -273,8 +273,10 @@ body {
   }
 
   .psp-card {
-    @apply rounded-[var(--radius)] bg-[var(--surface)] px-6 py-6;
+    @apply rounded-[var(--radius)] px-6 py-6;
+    background: var(--card-bg);
     border: 1px solid var(--card-border);
+    box-shadow: none;
   }
 
   .psp-card-dark {

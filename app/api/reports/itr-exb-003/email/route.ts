@@ -105,8 +105,9 @@ async function resolveLocation(locationId: string | null, locationName: string |
 
   if (!resolvedLocationId && locationName) {
     const { data: locationRow, error } = await supabase
-      .from("psp_locations")
+      .from("locations")
       .select("id,name")
+      .eq("location_type", "psp")
       .eq("name", locationName)
       .maybeSingle();
     if (error || !locationRow) return null;
@@ -116,8 +117,9 @@ async function resolveLocation(locationId: string | null, locationName: string |
 
   if (resolvedLocationId && !resolvedLocationName) {
     const { data: locationRow } = await supabase
-      .from("psp_locations")
+      .from("locations")
       .select("name")
+      .eq("location_type", "psp")
       .eq("id", resolvedLocationId)
       .maybeSingle();
     resolvedLocationName = locationRow?.name ?? resolvedLocationId;

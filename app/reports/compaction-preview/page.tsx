@@ -21,8 +21,9 @@ export default async function CompactionPreviewPage({ searchParams }: PreviewPro
   const reportNum = Number.parseInt(params?.reportNum ?? "1", 10);
 
   const { data: locations, error: locationError } = await supabase
-    .from("psp_locations")
+    .from("locations")
     .select("id,name")
+    .eq("location_type", "psp")
     .limit(100);
 
   if (locationError || !locations?.length) {

@@ -30,8 +30,9 @@ export async function GET() {
   try {
     const supabaseAnon = getSupabaseServer();
     const { error } = await supabaseAnon
-      .from("psp_locations")
+      .from("locations")
       .select("id")
+      .eq("location_type", "psp")
       .limit(1);
     if (error) {
       results.anonError = error.message;
@@ -48,8 +49,9 @@ export async function GET() {
     try {
       const supabaseService = getSupabaseServer({ useServiceRole: true });
       const { error } = await supabaseService
-        .from("psp_locations")
+        .from("locations")
         .select("id")
+        .eq("location_type", "psp")
         .limit(1);
       if (error) {
         results.serviceRoleError = error.message;

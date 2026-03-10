@@ -126,10 +126,11 @@ type CompactionReportRow = {
     if (!authEmail) return;
     const loadLocations = async () => {
       const { data, error } = await supabase
-        .from("psp_locations")
+        .from("locations")
         .select(
           "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
         )
+        .eq("location_type", "psp")
         .order("name");
       if (error) {
         pushToast({
@@ -696,15 +697,16 @@ type CompactionReportRow = {
     const response =
       locationModalMode === "create"
         ? await supabase
-            .from("psp_locations")
-            .insert(payload)
+            .from("locations")
+            .insert({ ...payload, location_type: "psp" })
             .select(
               "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
             )
             .single()
         : await supabase
-            .from("psp_locations")
+            .from("locations")
             .update(payload)
+            .eq("location_type", "psp")
             .eq("id", selectedLocationEditId)
             .select(
               "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
@@ -748,8 +750,9 @@ type CompactionReportRow = {
       return;
     }
     const { error } = await supabase
-      .from("psp_locations")
+      .from("locations")
       .update({ penetrometer_serial: value })
+      .eq("location_type", "psp")
       .eq("id", locationId);
     if (error) {
       pushToast({

@@ -34,8 +34,9 @@ export default async function ITRPreviewPage({ searchParams }: PreviewProps) {
   const reportNum = Number.parseInt(params?.reportNum ?? "1", 10);
 
   const { data: locations, error: locationError } = await supabase
-    .from("psp_locations")
+    .from("locations")
     .select("id,name")
+    .eq("location_type", "psp")
     .limit(1);
 
   if (locationError || !locations?.length) {

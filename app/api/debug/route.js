@@ -31,8 +31,9 @@ export async function GET() {
     const supabase = createClient(url, key);
 
     const { data, error } = await supabase
-      .from("psp_locations")
+      .from("locations")
       .select("id,name")
+      .eq("location_type", "psp")
       .limit(1);
 
     checks.supabase = error ? "ERROR" : "OK";

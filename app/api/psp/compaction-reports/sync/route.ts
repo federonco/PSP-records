@@ -92,8 +92,9 @@ export async function POST(request: NextRequest) {
   const { data: locationRow } = locationName
     ? { data: null }
     : await supabase
-        .from("psp_locations")
+        .from("locations")
         .select("name")
+        .eq("location_type", "psp")
         .eq("id", locationId)
         .maybeSingle();
 

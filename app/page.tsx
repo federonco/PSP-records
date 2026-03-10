@@ -140,8 +140,9 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
   useEffect(() => {
     const loadLocations = async () => {
       const { data, error } = await supabase
-        .from("psp_locations")
+        .from("locations")
         .select("id,name,penetrometer_serial,penetrometer_sn,compactor_serial")
+        .eq("location_type", "psp")
         .order("name");
       if (error) {
         pushToast({

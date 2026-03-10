@@ -75,7 +75,6 @@ export async function POST(request: NextRequest) {
   const { error } = await supabase
     .from("psp_records")
     .update({
-      location_name: locationName ?? null,
       section_id: sectionId ?? null,
       site_inspector: siteInspector,
       compactor_sn: compactorSnValue || null,

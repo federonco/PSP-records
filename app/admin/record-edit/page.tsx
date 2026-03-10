@@ -40,7 +40,6 @@
 
  type RecordPayload = {
    location_id: string;
-   location_name: string | null;
    section_id: string | null;
    chainage: number;
    site_inspector: string;
@@ -124,7 +123,6 @@ function RecordEditContent() {
        },
        body: JSON.stringify({
          locationId: record.location_id,
-         locationName: record.location_name,
          chainage: record.chainage,
          siteInspector,
          sectionId: record.section_id,
@@ -224,7 +222,7 @@ function RecordEditContent() {
 
    const summaryTitle = useMemo(() => {
      if (!record) return "Edit Record";
-     return `${record.location_name ?? record.location_id} · Ch ${record.chainage}`;
+     return `${record.location_id} · Ch ${record.chainage}`;
    }, [record]);
 
    return (
