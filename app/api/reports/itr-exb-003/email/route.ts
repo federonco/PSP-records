@@ -4,7 +4,7 @@ import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium-min";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
-  createTransporter,
+  sendEmail,
   getSenderAddress,
   buildHtmlBody,
 } from "@/lib/email";
@@ -257,10 +257,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
-  const pass = process.env.SMTP_PASS || process.env.RESEND_API_KEY;
-  if (!pass) {
+  if (!process.env.RESEND_API_KEY) {
     return NextResponse.json(
-      { error: "SMTP_PASS or RESEND_API_KEY is required" },
+      { error: "RESEND_API_KEY is required" },
       { status: 500 },
     );
   }
@@ -284,8 +283,7 @@ export async function POST(request: NextRequest) {
     const textBody = `Location: ${resolved.locationName}\nReport #: ${reportNum}\n${
       pending ? `Pending CH: ${pending}\n` : ""
     }`;
-    const transporter = createTransporter();
-    await transporter.sendMail({
+    await sendEmail({
       from: getSenderAddress(),
       to: recipient,
       subject: `PSP Record - ${resolved.locationName} - Rep #${reportNum}`,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Document, Page, Path, StyleSheet, Svg, Text, View, pdf } from "@react-pdf/renderer";
 import { getUserFromRequest } from "@/lib/api-auth";
 import {
-  createTransporter,
+  sendEmail,
   getSenderAddress,
   buildHtmlBody,
 } from "@/lib/email";
@@ -253,8 +253,7 @@ export async function POST(request: NextRequest) {
   const textBody = `Location: ${locationName ?? locationId}\nRecords: ${
     records?.length ?? 0
   }`;
-  const transporter = createTransporter();
-  await transporter.sendMail({
+  await sendEmail({
     from: getSenderAddress(),
     to,
     subject: `PSP Audit - ${locationName ?? locationId}`,

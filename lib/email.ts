@@ -1,14 +1,4 @@
-import nodemailer from "nodemailer";
-
-/** SMTP config aligned with OnSite-W: Resend fallbacks */
-export function getTransporterConfig() {
-  const host = process.env.SMTP_HOST || "smtp.resend.com";
-  const port = Number(process.env.SMTP_PORT) || 465;
-  const user = process.env.SMTP_USER || "resend";
-  const pass = process.env.SMTP_PASS || process.env.RESEND_API_KEY || "";
-  const secure = port === 465;
-  return { host, port, user, pass, secure };
-}
+import { Resend } from "resend";
 
 /** Sender: use SMTP_FROM (set in Vercel). Fallback for local dev. */
 export function getSenderAddress(): string {
@@ -65,16 +55,29 @@ export function buildHtmlBody(textBody: string): string {
   return `<div style="font-family: Arial, sans-serif; color: #333;">${escaped}${getReadxSignatureHtml()}</div>`;
 }
 
-/** Create nodemailer transporter using OnSite-W config pattern */
-export function createTransporter() {
-  const { host, port, user, pass, secure } = getTransporterConfig();
-  if (!pass) {
-    throw new Error("SMTP_PASS or RESEND_API_KEY is required");
+export async function sendEmail(options: {
+  from: string;
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
+}): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is required");
   }
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: { user, pass },
+  const resend = new Resend(apiKey);
+  const { error } = await resend.emails.send({
+    from: options.from,
+    to: options.to,
+    subject: options.subject,
+    text: options.text,
+    html: options.html,
+    attachments: options.attachments?.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    })),
   });
+  if (error) throw new Error(error.message);
 }
