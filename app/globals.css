@@ -273,10 +273,15 @@ body {
   }
 
   .psp-card {
-    @apply rounded-[var(--radius)] px-6 py-6;
+    @apply rounded-[var(--radius)];
+    padding: var(--card-padding);
     background: var(--card-bg) !important;
     border: 1px solid var(--card-border);
     box-shadow: none;
+  }
+  .psp-card [data-slot="card-header"] {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
   }
 
   .psp-card-dark {
@@ -295,7 +300,7 @@ body {
   }
   /* SelectTrigger con psp-input: mismo border-radius que las outer cards */
   [data-slot="select-trigger"].psp-input {
-    border-radius: var(--radius);
+    border-radius: var(--radius) !important;
   }
   /* Todos los SelectTrigger: borde #D3DAE1 */
   [data-slot="select-trigger"] {
@@ -519,10 +524,11 @@ body {
   opacity: 0.7;
 }
 
-/* Stepper (+ / -) Current chainage: color del círculo al hover y al presionar */
+/* Stepper (+ / -) Current chainage: hover/active igual que Lodge record (opacity) */
 .psp-stepper-btn:hover,
 .psp-stepper-btn:active {
-  background-color: #AAB4BE !important;
+  background-color: var(--color-blue-deep) !important;
+  opacity: 0.9;
 }
 
 /* ===============================
@@ -582,13 +588,6 @@ header.psp-header .psp-auth-signed-in-row {
 [data-dialog="location"] input.psp-input:focus-visible {
   border-color: var(--color-border-soft) !important;
   box-shadow: 0 0 0 3px var(--ring-soft) !important;
-}
-/* Create Location dialog: color de selección de texto en inputs */
-.psp-dialog-location-form input.psp-input::selection {
-  background-color: #9ca3af;
-}
-.psp-dialog-location-form input.psp-input::-moz-selection {
-  background-color: #9ca3af;
 }
 /* Create Location dialog: botón Save */
 .psp-dialog-location-save {

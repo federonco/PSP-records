@@ -576,108 +576,116 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
         ) : null}
 
         <Card className="psp-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Layers</CardTitle>
-            <div className="mt-2 flex items-center gap-2 text-xs text-[var(--muted-foreground)]">
-              <span className="font-semibold">Penetrometer S/N:</span>
-              <Select
-                value={
-                  selectedLocation?.penetrometer_sn ??
-                  (selectedLocation?.penetrometer_serial != null
-                    ? String(selectedLocation.penetrometer_serial)
-                    : "#3059-0325")
-                }
-                onValueChange={async (value) => {
-                  if (!locationId) return;
-                  const token = await getAccessToken();
-                  const res = await fetch(`/api/psp/locations/${locationId}`, {
-                    method: "PATCH",
-                    headers: {
-                      "Content-Type": "application/json",
-                      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                    },
-                    body: JSON.stringify({ penetrometerSn: value }),
-                  });
-                  if (res.ok) {
-                    setLocations((prev) =>
-                      prev.map((loc) =>
-                        loc.id === locationId
-                          ? { ...loc, penetrometer_sn: value }
-                          : loc,
-                      ),
-                    );
-                  } else {
-                    const payload = await res.json();
-                    pushToast({
-                      type: "error",
-                      title: "Failed to update penetrometer",
-                      message: payload.error ?? "Unknown error",
-                    });
-                  }
-                }}
-              >
-                <SelectTrigger className="h-8 w-[140px] border-0 bg-transparent px-1 py-0 text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
-                  <SelectValue placeholder="#3059-0325" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(penetrometerOptions.length
-                    ? penetrometerOptions
-                    : [{ id: "default", serial_text: "#3059-0325", sort_order: 0 }]
-                  ).map((o) => (
-                    <SelectItem
-                      key={o.id}
-                      value={o.serial_text}
-                      className="text-xs"
-                    >
-                      {o.serial_text}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 shrink-0 text-[var(--muted-foreground)]"
-                  >
-                    ⋮
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => setPenetrometerAddOpen(true)}>
-                    Add new penetrometer
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      const current =
-                        selectedLocation?.penetrometer_sn ??
-                        (selectedLocation?.penetrometer_serial != null
-                          ? String(selectedLocation.penetrometer_serial)
-                          : "#3059-0325");
-                      const p = penetrometerOptions.find(
-                        (x) => x.serial_text === current,
-                      );
-                      if (p && p.id !== "default") {
-                        setPenetrometerEditId(p.id);
-                        setPenetrometerEditInput(p.serial_text);
-                        setPenetrometerEditOpen(true);
+          <CardHeader className="pb-2 gap-y-[14px]">
+            <CardTitle className="psp-section-label">Layers</CardTitle>
+            <div className="grid gap-3">
+              <div className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                  <span className="font-semibold">Penetrometer S/N:</span>
+                  <Select
+                    value={
+                      selectedLocation?.penetrometer_sn ??
+                      (selectedLocation?.penetrometer_serial != null
+                        ? String(selectedLocation.penetrometer_serial)
+                        : "#3059-0325")
+                    }
+                    onValueChange={async (value) => {
+                      if (!locationId) return;
+                      const token = await getAccessToken();
+                      const res = await fetch(`/api/psp/locations/${locationId}`, {
+                        method: "PATCH",
+                        headers: {
+                          "Content-Type": "application/json",
+                          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                        },
+                        body: JSON.stringify({ penetrometerSn: value }),
+                      });
+                      if (res.ok) {
+                        setLocations((prev) =>
+                          prev.map((loc) =>
+                            loc.id === locationId
+                              ? { ...loc, penetrometer_sn: value }
+                              : loc,
+                          ),
+                        );
                       } else {
+                        const payload = await res.json();
                         pushToast({
-                          type: "info",
-                          title: "Edit penetrometer",
-                          message:
-                            "Select a penetrometer from the list or add a new one first.",
+                          type: "error",
+                          title: "Failed to update penetrometer",
+                          message: payload.error ?? "Unknown error",
                         });
                       }
                     }}
                   >
-                    Edit
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <div className="grid gap-3">
+                    <SelectTrigger className="h-10 w-[140px] border-0 bg-[var(--surface-alt)] px-4 py-2 rounded-[12px] text-xs font-medium text-[var(--ink)] shadow-none focus:ring-0">
+                      <SelectValue placeholder="#3059-0325" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(penetrometerOptions.length
+                        ? penetrometerOptions
+                        : [
+                            {
+                              id: "default",
+                              serial_text: "#3059-0325",
+                              sort_order: 0,
+                            },
+                          ]
+                      ).map((o) => (
+                        <SelectItem
+                          key={o.id}
+                          value={o.serial_text}
+                          className="text-xs"
+                        >
+                          {o.serial_text}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 text-[var(--muted-foreground)] ml-auto"
+                      >
+                        ⋮
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setPenetrometerAddOpen(true)}>
+                        Add new penetrometer
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          const current =
+                            selectedLocation?.penetrometer_sn ??
+                            (selectedLocation?.penetrometer_serial != null
+                              ? String(selectedLocation.penetrometer_serial)
+                              : "#3059-0325");
+                          const p = penetrometerOptions.find(
+                            (x) => x.serial_text === current,
+                          );
+                          if (p && p.id !== "default") {
+                            setPenetrometerEditId(p.id);
+                            setPenetrometerEditInput(p.serial_text);
+                            setPenetrometerEditOpen(true);
+                          } else {
+                            pushToast({
+                              type: "info",
+                              title: "Edit penetrometer",
+                              message:
+                                "Select a penetrometer from the list or add a new one first.",
+                            });
+                          }
+                        }}
+                      >
+                        Edit
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
               {[0, 1, 2].map((layerIndex) => (
                 <div
                   key={`layer-${layerIndex}`}
@@ -802,8 +810,8 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           {duplicate ? (
             <div className="pt-3">
               <Button
-                variant="destructive"
-                className="w-full shrink-0 min-h-11"
+                className="w-full shrink-0 min-h-11 rounded-full border border-[#F5C7CB] bg-[#FCEBEC] px-4 py-1 font-[500] text-[#B4232C] shadow-none hover:bg-[#FCEBEC]/80 hover:text-[#B4232C] active:bg-[#FCEBEC]/70 font-[family-name:var(--font-display)]"
+                style={{ fontFamily: "Manrope, var(--font-display), sans-serif" }}
                 onClick={() => setOverwriteOpen(true)}
                 disabled={!canSubmit}
               >
@@ -954,11 +962,13 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
           <DialogFooter>
             <Button
               variant="outline"
+              className="bg-[#E6EDF3] border-[#E6EDF3] text-[var(--ink)] hover:bg-[#E6EDF3]/90"
               onClick={() => setPenetrometerEditOpen(false)}
             >
               Cancel
             </Button>
             <Button
+              className="bg-[#556F87] text-white hover:bg-[#556F87]/90"
               onClick={async () => {
                 if (!penetrometerEditId) return;
                 const text = penetrometerEditInput.trim();

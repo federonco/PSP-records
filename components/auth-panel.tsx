@@ -107,7 +107,7 @@
 
    if (forgotMode) {
      return (
-       <div className="grid gap-2 rounded-[12px] bg-[var(--surface-2)] p-3">
+       <div className="grid gap-2">
          <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">
            Forgot password
          </p>
@@ -138,10 +138,7 @@
    }
 
    return (
-     <div className="grid gap-2 rounded-[12px] bg-[var(--surface-2)] p-3">
-       <p className="text-xs font-semibold uppercase text-[var(--muted-foreground)]">
-         Sign in
-       </p>
+     <div className="grid gap-2">
        <Input
          className="psp-input psp-input-auth h-9 text-[16px] md:text-xs"
          value={email}
@@ -164,13 +161,13 @@
        >
          {loading ? "Signing in..." : "Sign in"}
        </Button>
-       <button
-         type="button"
-         onClick={() => setForgotMode(true)}
-         className="text-left text-xs text-[var(--muted-foreground)] underline hover:text-[var(--ink)]"
-       >
-         Forgot password?
-       </button>
+      <button
+        type="button"
+        onClick={() => setForgotMode(true)}
+        className="w-full text-center text-xs text-[#556F87] underline hover:text-[var(--ink)]"
+      >
+        Forgot password?
+      </button>
      </div>
    );
  }

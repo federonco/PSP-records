@@ -803,7 +803,9 @@ type CompactionReportRow = {
               PSP Admin center
             </h1>
           </div>
-          <AuthPanel onAuthChange={setAuthEmail} />
+          <div className="mt-[28px]">
+            <AuthPanel onAuthChange={setAuthEmail} />
+          </div>
         </header>
 
         <div className="psp-outer relative">
@@ -865,8 +867,22 @@ type CompactionReportRow = {
         </div>
 
         <div className="psp-outer">
-  <div className="pb-2">
-    <div className="psp-section-label">PSP Compaction Reports</div>
+  <div className="pb-2 flex items-center justify-between">
+    <div className="psp-section-label">PSP Compaction reports</div>
+    {selectedLocation ? (
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-7 w-7 shrink-0 rounded-full border-[#E6EDF3] bg-[#E6EDF3] text-[var(--ink)] hover:bg-[#D3DAE1] hover:border-[#D3DAE1]"
+        onClick={syncCompactionReports}
+        disabled={!authEmail || syncingReports}
+        title={syncingReports ? "Syncing..." : "Sync"}
+      >
+        <RefreshCw
+          className={`size-4 ${syncingReports ? "animate-spin" : ""}`}
+        />
+      </Button>
+    ) : null}
   </div>
 
   <div className="space-y-3">
@@ -877,24 +893,14 @@ type CompactionReportRow = {
               {selectedLocation.name}
             </p>
             <div className="flex gap-2 text-xs">
-              <Badge className="rounded-full bg-[#16a34a] px-2 py-0.5 text-[10px] font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#CFE8DA] bg-[#E7F4EC] px-2 py-0.5 text-[10px] font-medium text-[#2F7D55]">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2F7D55]" aria-hidden />
                 Ready {compactionSummary.ready}
-              </Badge>
-              <Badge className="rounded-full bg-[#f59e0b] px-2 py-0.5 text-[10px] font-semibold text-white">
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-[#F3E3B0] bg-[#FFF6DB] px-2 py-0.5 text-[10px] font-medium text-[#9A6B00]">
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#D8A200]" aria-hidden />
                 Open {compactionSummary.open}
-              </Badge>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 w-7 shrink-0 rounded-full border-[#E6EDF3] bg-[#E6EDF3] text-[var(--ink)] hover:bg-[#D3DAE1] hover:border-[#D3DAE1]"
-                onClick={syncCompactionReports}
-                disabled={!authEmail || syncingReports}
-                title={syncingReports ? "Syncing..." : "Sync"}
-              >
-                <RefreshCw
-                  className={`size-4 ${syncingReports ? "animate-spin" : ""}`}
-                />
-              </Button>
+              </span>
             </div>
           </div>
 
@@ -951,15 +957,17 @@ type CompactionReportRow = {
 
                   <p className="mt-1 text-xs text-[var(--muted-foreground)]">
                     Status:{" "}
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold text-white ${
-                        report.status === "READY"
-                          ? "bg-[#16a34a]"
-                          : "bg-[#f59e0b]"
-                      }`}
-                    >
-                      {report.status === "READY" ? "READY" : "OPEN"}
-                    </span>
+                    {report.status === "READY" ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#CFE8DA] bg-[#E7F4EC] px-2 py-0.5 text-[10px] font-medium text-[#2F7D55]">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#2F7D55]" aria-hidden />
+                        Ready
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-[#F3E3B0] bg-[#FFF6DB] px-2 py-0.5 text-[10px] font-medium text-[#9A6B00]">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#D8A200]" aria-hidden />
+                        Open
+                      </span>
+                    )}
                   </p>
 
                   {isOpen && report.pending_chainages?.length ? (
@@ -976,7 +984,7 @@ type CompactionReportRow = {
                       </div>
                       <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--surface-alt)]">
                         <div
-                          className="h-full rounded-full bg-[#f59e0b]"
+                          className="h-full rounded-full bg-[#556F87]"
                           style={{ width: `${progressPercent}%` }}
                         />
                       </div>
@@ -1040,7 +1048,7 @@ type CompactionReportRow = {
       </Dialog>
 
       <Dialog open={locationModalOpen} onOpenChange={setLocationModalOpen}>
-        <DialogContent className="psp-dialog-location !bg-[#F7F9FB] !text-[#6b7280]" data-dialog="location">
+        <DialogContent data-dialog="location">
           <DialogHeader>
             <DialogTitle>
               {locationModalMode === "create" ? "Create location" : "Edit location"}
@@ -1048,7 +1056,7 @@ type CompactionReportRow = {
           </DialogHeader>
           <div className="psp-dialog-location-form space-y-3">
             <div className="space-y-1">
-              <label className="psp-label text-[#6b7280]">Location name</label>
+              <label className="psp-label">Location name</label>
               <Input
                 className="psp-input"
                 value={locationNameInput}
@@ -1056,7 +1064,7 @@ type CompactionReportRow = {
               />
             </div>
             <div className="space-y-1">
-              <label className="psp-label text-[#6b7280]">Starting chainage (ch)</label>
+              <label className="psp-label">Starting chainage (ch)</label>
               <Input
                 type="number"
                 className="psp-input"
@@ -1065,7 +1073,7 @@ type CompactionReportRow = {
               />
             </div>
             <div className="space-y-1">
-              <label className="psp-label text-[#6b7280]">End chainage (ch)</label>
+              <label className="psp-label">End chainage (ch)</label>
               <Input
                 type="number"
                 className="psp-input"
@@ -1074,14 +1082,14 @@ type CompactionReportRow = {
               />
             </div>
             <div className="space-y-1">
-              <label className="psp-label text-[#6b7280]">Direction</label>
+              <label className="psp-label">Direction</label>
               <Select
                 value={locationDirectionInput}
                 onValueChange={(value) =>
                   setLocationDirectionInput(value as "backwards" | "onwards")
                 }
               >
-                <SelectTrigger className="psp-input !bg-[#F7F9FB] !text-[#6b7280]">
+                <SelectTrigger className="psp-input">
                   <SelectValue placeholder="Select direction" />
                 </SelectTrigger>
                 <SelectContent>
