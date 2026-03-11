@@ -35,23 +35,18 @@ export default function RootLayout({
           <div className="flex min-h-screen flex-col">
             <div className="flex-1">{children}</div>
             <footer className="px-6 pb-6 pt-2 text-center text-xs text-[var(--muted-foreground)]">
-              <div>
-                AppName - Version - Created By{" "}
-              <a
-                href="https://www.readx.com.au"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 align-middle -translate-y-[1px]"
-              >
-                <img
-                  src="/readx.png"
-                  alt="readX"
-                  className="h-2.5 w-auto"
-                />
-                <sup className="text-[8px]">TM</sup>
-              </a>{" "}
+              <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
+                <span>Created by</span>
+                <a
+                  href="https://www.readx.com.au"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 align-middle -translate-y-[1px]"
+                >
+                  <img src="/readx.png" alt="readX" className="h-2.5 w-auto" />
+                </a>
+                <span>- OnSite-B - All rights reserved.</span>
               </div>
-              <div>All Rights Reserved</div>
             </footer>
           </div>
         </Providers>
