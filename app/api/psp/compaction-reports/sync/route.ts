@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     ? { data: null }
     : await supabase
         .from("locations")
-        .select("name")
+        .select("name,penetrometer_sn")
         .eq("location_type", "psp")
         .eq("id", locationId)
         .maybeSingle();
@@ -224,6 +224,7 @@ export async function POST(request: NextRequest) {
         REPORT_DATE: reportDate,
         SUPERVISOR_NAME: supervisorName,
         WORK_LOCATION: resolvedLocationName,
+        PENETROMETER_SN: locationRow?.penetrometer_sn ?? "",
         records: templateRecords,
       };
       const result = await generateCompactionPdf(templateData);

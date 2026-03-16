@@ -107,30 +107,33 @@ async function resolveLocation(locationId: string | null, locationName: string |
   const supabase = getSupabaseServer({ useServiceRole: true });
   let resolvedLocationId = locationId ?? "";
   let resolvedLocationName = locationName ?? "";
+  let penetrometerSn: string | null = null;
 
   if (!resolvedLocationId && locationName) {
     const { data: locationRow, error } = await supabase
       .from("locations")
-      .select("id,name")
+      .select("id,name,penetrometer_sn")
       .eq("location_type", "psp")
       .eq("name", locationName)
       .maybeSingle();
     if (error || !locationRow) return null;
     resolvedLocationId = locationRow.id;
     resolvedLocationName = locationRow.name;
+    penetrometerSn = locationRow.penetrometer_sn ?? null;
   }
 
   if (resolvedLocationId && !resolvedLocationName) {
     const { data: locationRow } = await supabase
       .from("locations")
-      .select("name")
+      .select("name,penetrometer_sn")
       .eq("location_type", "psp")
       .eq("id", resolvedLocationId)
       .maybeSingle();
     resolvedLocationName = locationRow?.name ?? resolvedLocationId;
+    penetrometerSn = locationRow?.penetrometer_sn ?? penetrometerSn;
   }
 
-  return { locationId: resolvedLocationId, locationName: resolvedLocationName };
+  return { locationId: resolvedLocationId, locationName: resolvedLocationName, penetrometerSn };
 }
 
 async function getEmailFromToken(request: NextRequest) {
@@ -151,9 +154,10 @@ async function generateITRExb003Pdf(params: {
   locationName: string;
   reportNum: number;
   includeOpen: boolean;
+  penetrometerSn: string | null;
 }) {
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { locationId, locationName, reportNum, includeOpen } = params;
+  const { locationId, locationName, reportNum, includeOpen, penetrometerSn } = params;
 
   const { data: chainageRows, error: chainageError } = await supabase
     .from("psp_records")
@@ -217,6 +221,7 @@ async function generateITRExb003Pdf(params: {
     REPORT_DATE: reportDate,
     SUPERVISOR_NAME: supervisorName,
     WORK_LOCATION: locationName,
+    PENETROMETER_SN: penetrometerSn ?? "",
     records: recordsPayload,
   };
 
@@ -270,6 +275,7 @@ export async function POST(request: NextRequest) {
       locationName: resolved.locationName,
       reportNum,
       includeOpen,
+      penetrometerSn: resolved.penetrometerSn,
     });
     const safeLocation = resolved.locationName.replace(/\s+/g, "-");
     if (!recipient) {

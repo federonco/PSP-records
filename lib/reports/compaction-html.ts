@@ -5,7 +5,7 @@ import type { CompactionTemplateData, CompactionRecord } from "@/lib/reporting/c
 const DOC_NO = "9823-PW-QAT-ITC-0005";
 const EFFECTIVE_DATE = "19/06/2025";
 const REVISION_NO = "0";
-const MIN_BLOWS = "6";
+const MIN_BLOWS = "";
 const AREA_SUBLOT_DEFAULT = "SECA-";
 
 function escapeHtml(value: string | number | undefined | null): string {

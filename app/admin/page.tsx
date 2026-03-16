@@ -44,6 +44,7 @@ type Location = {
   length_m?: number | null;
   quality_reports_required?: number | null;
   penetrometer_serial?: number | null;
+  penetrometer_sn?: string | null;
 };
  type RecordRow = {
   location_id: string;
@@ -97,6 +98,8 @@ type CompactionReportRow = {
   const [locationDirectionInput, setLocationDirectionInput] = useState<
     "backwards" | "onwards"
   >("backwards");
+  const [locationPenetrometerIdInput, setLocationPenetrometerIdInput] =
+    useState("");
   const [selectedLocationEditId, setSelectedLocationEditId] = useState<
     string | null
   >(null);
@@ -128,7 +131,7 @@ type CompactionReportRow = {
       const { data, error } = await supabase
         .from("locations")
         .select(
-          "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
+          "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial,penetrometer_sn",
         )
         .eq("location_type", "psp")
         .order("name");
@@ -348,8 +351,27 @@ type CompactionReportRow = {
     const pending = Math.max(required - ready, 0);
     const percent =
       required > 0 ? Math.min(100, Math.round((ready / required) * 100)) : 0;
-    return { required, pending, percent };
-  }, [compactionSummary.ready, locationRequirement]);
+
+    let lengthPercent = 0;
+    if (selectedLocation) {
+      const start = selectedLocation.start_chainage;
+      const end = selectedLocation.end_chainage;
+      if (typeof start === "number" && typeof end === "number") {
+        const length = Math.abs(end - start);
+        if (length > 0) {
+          const totalSteps = Math.floor(length / CHAINAGE_STEP) + 1;
+          const uniqueChainages = new Set(records.map((row) => row.chainage));
+          const covered = Math.min(uniqueChainages.size, totalSteps);
+          lengthPercent = Math.min(
+            100,
+            Math.round((covered / totalSteps) * 100),
+          );
+        }
+      }
+    }
+
+    return { required, pending, percent, lengthPercent };
+  }, [compactionSummary.ready, locationRequirement, records, selectedLocation]);
 
   const openSendPdfModal = async (report: CompactionReportRow) => {
     setSendPdfReport(report);
@@ -627,11 +649,13 @@ type CompactionReportRow = {
           : "",
       );
       setLocationDirectionInput(loc?.direction ?? "backwards");
+      setLocationPenetrometerIdInput(loc?.penetrometer_sn ?? "");
     } else {
       setLocationNameInput("");
       setLocationStartInput("");
       setLocationEndInput("");
       setLocationDirectionInput("backwards");
+      setLocationPenetrometerIdInput("");
     }
     setLocationModalOpen(true);
   };
@@ -692,6 +716,7 @@ type CompactionReportRow = {
       data_source: "psp_records",
       length_m: length,
       quality_reports_required: qualityReportsRequired,
+      penetrometer_sn: locationPenetrometerIdInput || null,
     };
 
     const response =
@@ -700,7 +725,7 @@ type CompactionReportRow = {
             .from("locations")
             .insert({ ...payload, location_type: "psp" })
             .select(
-              "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
+              "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial,penetrometer_sn",
             )
             .single()
         : await supabase
@@ -733,25 +758,17 @@ type CompactionReportRow = {
   };
 
   const handleOpenPenetrometer = () => {
-    const current = selectedLocation?.penetrometer_serial;
-    setPenetrometerInput(String(current ?? 1));
+    const current = selectedLocation?.penetrometer_sn;
+    setPenetrometerInput(current ?? "");
     setPenetrometerOpen(true);
   };
 
   const handleSavePenetrometer = async () => {
     if (!locationId) return;
-    const value = Number(penetrometerInput);
-    if (!Number.isFinite(value) || value <= 0) {
-      pushToast({
-        type: "error",
-        title: "Invalid serial",
-        message: "Penetrometer serial must be a positive number.",
-      });
-      return;
-    }
+    const value = penetrometerInput;
     const { error } = await supabase
       .from("locations")
-      .update({ penetrometer_serial: value })
+      .update({ penetrometer_sn: value })
       .eq("location_type", "psp")
       .eq("id", locationId);
     if (error) {
@@ -764,7 +781,7 @@ type CompactionReportRow = {
     }
     setLocations((prev) =>
       prev.map((loc) =>
-        loc.id === locationId ? { ...loc, penetrometer_serial: value } : loc,
+        loc.id === locationId ? { ...loc, penetrometer_sn: value } : loc,
       ),
     );
     setPenetrometerOpen(false);
@@ -925,7 +942,7 @@ type CompactionReportRow = {
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Progress</span>
-                  <span>{progressSummary.percent}%</span>
+                  <span>{progressSummary.lengthPercent}%</span>
                 </div>
               </div>
             ) : null}
@@ -1082,6 +1099,16 @@ type CompactionReportRow = {
               />
             </div>
             <div className="space-y-1">
+              <label className="psp-label">Penetrometer ID</label>
+              <Input
+                className="psp-input"
+                value={locationPenetrometerIdInput}
+                onChange={(event) =>
+                  setLocationPenetrometerIdInput(event.target.value)
+                }
+              />
+            </div>
+            <div className="space-y-1">
               <label className="psp-label">Direction</label>
               <Select
                 value={locationDirectionInput}
@@ -1118,7 +1145,6 @@ type CompactionReportRow = {
           <div className="space-y-2">
             <label className="psp-label">Serial number</label>
             <Input
-              type="number"
               className="psp-input"
               value={penetrometerInput}
               onChange={(event) => setPenetrometerInput(event.target.value)}

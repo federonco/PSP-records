@@ -14,7 +14,7 @@ import type { CompactionTemplateData, CompactionRecord } from "./compaction";
 const DOC_NO = "9823-PW-QAT-ITC-0005";
 const EFFECTIVE_DATE = "19/06/2025";
 const REVISION_NO = "0";
-const MIN_BLOWS = "6";
+const MIN_BLOWS = "";
 const AREA_SUBLOT = "SECA-";
 
 // Portrait A4: 595pt wide, 842pt tall; margins 18pt each side
