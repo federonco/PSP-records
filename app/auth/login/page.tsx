@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -18,7 +18,7 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const supabase = createClient();
+    const supabase = getSupabaseBrowser();
     const callbackUrl = `${window.location.origin}/auth/callback?redirect=${encodeURIComponent(redirect)}`;
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
