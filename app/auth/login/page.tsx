@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createClient } from "@/supabase/client";
 
 function LoginForm() {
   const searchParams = useSearchParams();
