@@ -42,7 +42,7 @@ type Location = {
   chainage_increment?: number | null;
   data_source?: string | null;
   length_m?: number | null;
-  quality_reports_required?: number | null;
+  quality_reports_required?: boolean | null;
   penetrometer_serial?: number | null;
   penetrometer_sn?: string | null;
 };
@@ -333,9 +333,6 @@ type CompactionReportRow = {
 
   const locationRequirement = useMemo(() => {
     if (!selectedLocation) return null;
-    if (selectedLocation.quality_reports_required !== null && selectedLocation.quality_reports_required !== undefined) {
-      return selectedLocation.quality_reports_required;
-    }
     const start = selectedLocation.start_chainage;
     const end = selectedLocation.end_chainage;
     if (typeof start === "number" && typeof end === "number") {
@@ -694,7 +691,6 @@ type CompactionReportRow = {
     }
 
     const length = Math.abs(endValue - startValue);
-    const qualityReportsRequired = Math.ceil(length / 200);
 
     const session = await supabase.auth.getSession();
     const token = session.data.session?.access_token;
@@ -702,7 +698,7 @@ type CompactionReportRow = {
       pushToast({
         type: "error",
         title: "Sign in required",
-      message: "Authenticate before editing locations.",
+        message: "Authenticate before editing locations.",
       });
       return;
     }
@@ -715,7 +711,7 @@ type CompactionReportRow = {
       chainage_increment: increment,
       data_source: "psp_records",
       length_m: length,
-      quality_reports_required: qualityReportsRequired,
+      quality_reports_required: true,
       penetrometer_sn: locationPenetrometerIdInput || null,
     };
 
@@ -806,8 +802,6 @@ type CompactionReportRow = {
     setEditRecordOpen(false);
     router.push(`/admin/record-edit?locationId=${locationId}&chainage=${value}`);
   };
-
-  
 
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -1219,7 +1213,7 @@ type CompactionReportRow = {
               <p>Length: {selectedLocation.length_m ?? "—"} m</p>
               <p>
                 Minimum ITR required:{" "}
-                {selectedLocation.quality_reports_required ?? "—"}
+                {locationRequirement ?? "—"}
               </p>
               <p>Reports READY: {compactionSummary.ready}</p>
               <p>Reports OPEN: {compactionSummary.open}</p>
