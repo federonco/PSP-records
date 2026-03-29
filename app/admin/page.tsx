@@ -7,6 +7,11 @@ import { useRouter } from "next/navigation";
  import { ConfirmButton } from "@/components/confirm-button";
  import { useToast } from "@/components/toast";
 import { BLOCK_SIZE, CHAINAGE_STEP, getBlockChainages } from "@/lib/psp";
+import {
+  getEffectiveLocationFields,
+  LOCATION_LIST_SELECT,
+  mergeLocationAppConfig,
+} from "@/lib/location-app-config";
  import { getSupabaseBrowser } from "@/lib/supabase/browser";
  import { Badge } from "@/components/ui/badge";
  import { Button } from "@/components/ui/button";
@@ -39,12 +44,9 @@ type Location = {
   start_chainage?: number | null;
   end_chainage?: number | null;
   direction?: "backwards" | "onwards" | null;
-  chainage_increment?: number | null;
-  data_source?: string | null;
   length_m?: number | null;
-  quality_reports_required?: boolean | null;
-  penetrometer_serial?: number | null;
-  penetrometer_sn?: string | null;
+  location_type?: string | null;
+  app_config?: Record<string, unknown> | null;
 };
  type RecordRow = {
   location_id: string;
@@ -130,9 +132,7 @@ type CompactionReportRow = {
     const loadLocations = async () => {
       const { data, error } = await supabase
         .from("locations")
-        .select(
-          "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial,penetrometer_sn",
-        )
+        .select(LOCATION_LIST_SELECT)
         .eq("location_type", "psp")
         .order("name");
       if (error) {
@@ -333,6 +333,13 @@ type CompactionReportRow = {
 
   const locationRequirement = useMemo(() => {
     if (!selectedLocation) return null;
+    const eff = getEffectiveLocationFields(selectedLocation);
+    if (
+      eff.quality_reports_required !== null &&
+      eff.quality_reports_required !== undefined
+    ) {
+      return eff.quality_reports_required;
+    }
     const start = selectedLocation.start_chainage;
     const end = selectedLocation.end_chainage;
     if (typeof start === "number" && typeof end === "number") {
@@ -646,7 +653,9 @@ type CompactionReportRow = {
           : "",
       );
       setLocationDirectionInput(loc?.direction ?? "backwards");
-      setLocationPenetrometerIdInput(loc?.penetrometer_sn ?? "");
+      setLocationPenetrometerIdInput(
+        getEffectiveLocationFields(loc).penetrometer_sn ?? "",
+      );
     } else {
       setLocationNameInput("");
       setLocationStartInput("");
@@ -703,16 +712,24 @@ type CompactionReportRow = {
       return;
     }
 
+    const existingRow =
+      locationModalMode === "edit"
+        ? locations.find((l) => l.id === selectedLocationEditId)
+        : undefined;
+    const mergedConfig = mergeLocationAppConfig(existingRow?.app_config, {
+      chainage_increment: increment,
+      data_source: "psp_records",
+      quality_reports_required: qualityReportsRequired,
+      penetrometer_sn: locationPenetrometerIdInput || null,
+    });
+
     const payload = {
       name: locationNameInput,
       start_chainage: startValue,
       end_chainage: endValue,
       direction: locationDirectionInput,
-      chainage_increment: increment,
-      data_source: "psp_records",
       length_m: length,
-      quality_reports_required: true,
-      penetrometer_sn: locationPenetrometerIdInput || null,
+      app_config: mergedConfig,
     };
 
     const response =
@@ -720,18 +737,14 @@ type CompactionReportRow = {
         ? await supabase
             .from("locations")
             .insert({ ...payload, location_type: "psp" })
-            .select(
-              "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial,penetrometer_sn",
-            )
+            .select(LOCATION_LIST_SELECT)
             .single()
         : await supabase
             .from("locations")
             .update(payload)
             .eq("location_type", "psp")
             .eq("id", selectedLocationEditId)
-            .select(
-              "id,name,start_chainage,end_chainage,direction,chainage_increment,data_source,length_m,quality_reports_required,penetrometer_serial",
-            )
+            .select(LOCATION_LIST_SELECT)
             .maybeSingle();
 
     if (response.error || !response.data) {
@@ -754,7 +767,9 @@ type CompactionReportRow = {
   };
 
   const handleOpenPenetrometer = () => {
-    const current = selectedLocation?.penetrometer_sn;
+    const current = selectedLocation
+      ? getEffectiveLocationFields(selectedLocation).penetrometer_sn
+      : null;
     setPenetrometerInput(current ?? "");
     setPenetrometerOpen(true);
   };
@@ -762,9 +777,13 @@ type CompactionReportRow = {
   const handleSavePenetrometer = async () => {
     if (!locationId) return;
     const value = penetrometerInput;
+    const loc = locations.find((l) => l.id === locationId);
+    const merged = mergeLocationAppConfig(loc?.app_config, {
+      penetrometer_sn: value,
+    });
     const { error } = await supabase
       .from("locations")
-      .update({ penetrometer_sn: value })
+      .update({ app_config: merged })
       .eq("location_type", "psp")
       .eq("id", locationId);
     if (error) {
@@ -777,7 +796,7 @@ type CompactionReportRow = {
     }
     setLocations((prev) =>
       prev.map((loc) =>
-        loc.id === locationId ? { ...loc, penetrometer_sn: value } : loc,
+        loc.id === locationId ? { ...loc, app_config: merged } : loc,
       ),
     );
     setPenetrometerOpen(false);
@@ -1209,7 +1228,11 @@ type CompactionReportRow = {
                 {selectedLocation.end_chainage ?? "—"}
               </p>
               <p>Direction: {selectedLocation.direction ?? "—"}</p>
-              <p>Increment: {selectedLocation.chainage_increment ?? CHAINAGE_STEP}</p>
+              <p>
+                Increment:{" "}
+                {getEffectiveLocationFields(selectedLocation).chainage_increment ??
+                  CHAINAGE_STEP}
+              </p>
               <p>Length: {selectedLocation.length_m ?? "—"} m</p>
               <p>
                 Minimum ITR required:{" "}

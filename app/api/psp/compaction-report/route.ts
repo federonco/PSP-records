@@ -4,6 +4,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { type CompactionTemplateData } from "@/lib/reporting/compaction";
 import { generateCompactionPdf } from "@/lib/reporting/compaction-pdf";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getPenetrometerSnForTemplate } from "@/lib/location-app-config";
 
 export const runtime = "nodejs";
 
@@ -37,7 +38,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseServer({ useServiceRole: true });
     const { data: locationRow } = await supabase
       .from("locations")
-      .select("penetrometer_sn")
+      .select("app_config")
       .eq("location_type", "psp")
       .eq("id", locationId)
       .maybeSingle();
@@ -72,7 +73,7 @@ export async function POST(request: NextRequest) {
       REPORT_DATE: reportDate,
       SUPERVISOR_NAME: supervisorName,
       WORK_LOCATION: locationName ?? locationId,
-      PENETROMETER_SN: locationRow?.penetrometer_sn ?? "",
+      PENETROMETER_SN: getPenetrometerSnForTemplate(locationRow ?? undefined),
       records: (records ?? []).map((record) => ({
         date: formatter.format(new Date(record.recorded_at)),
         ch: record.chainage,

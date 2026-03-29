@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { mergeLocationAppConfig } from "@/lib/location-app-config";
 
 export async function PATCH(
   request: NextRequest,
@@ -29,12 +30,27 @@ export async function PATCH(
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
 
-  const { data, error } = await supabase
+  const { data: current, error: fetchError } = await supabase
     .from("locations")
-    .update({ penetrometer_sn: sn || null })
+    .select("app_config")
     .eq("location_type", "psp")
     .eq("id", id)
-    .select("id,penetrometer_sn")
+    .maybeSingle();
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+
+  const merged = mergeLocationAppConfig(current?.app_config, {
+    penetrometer_sn: sn || null,
+  });
+
+  const { data, error } = await supabase
+    .from("locations")
+    .update({ app_config: merged })
+    .eq("location_type", "psp")
+    .eq("id", id)
+    .select("id,app_config")
     .single();
 
   if (error) {

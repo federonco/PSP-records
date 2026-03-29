@@ -11,6 +11,11 @@
  } from "@/components/signature-pad";
  import { useToast } from "@/components/toast";
  import { CHAINAGE_STEP } from "@/lib/psp";
+import {
+  getEffectiveLocationFields,
+  LOCATION_LIST_SELECT,
+  mergeLocationAppConfig,
+} from "@/lib/location-app-config";
  import { getSupabaseBrowser } from "@/lib/supabase/browser";
  import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
  import { Button } from "@/components/ui/button";
@@ -41,9 +46,7 @@ import { Loader2 } from "lucide-react";
  type Location = {
     id: string;
     name: string;
-    penetrometer_serial?: number | null;
-    penetrometer_sn?: string | null;
-    compactor_serial?: number | null;
+    app_config?: Record<string, unknown> | null;
   };
  type Section = { id: string; name: string };
  type PenetrometerOption = { id: string; serial_text: string; sort_order: number };
@@ -141,7 +144,7 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
     const loadLocations = async () => {
       const { data, error } = await supabase
         .from("locations")
-        .select("id,name,penetrometer_serial,penetrometer_sn,compactor_serial")
+        .select(LOCATION_LIST_SELECT)
         .eq("location_type", "psp")
         .order("name");
       if (error) {
@@ -341,7 +344,12 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
          chainage,
          siteInspector,
          layers,
-         compactorSn: selectedLocation?.compactor_serial != null ? String(selectedLocation.compactor_serial) : (selectedLocation?.penetrometer_sn ?? "#3059-0325"),
+         compactorSn: (() => {
+           const eff = getEffectiveLocationFields(selectedLocation);
+           return eff.compactor_serial != null
+             ? String(eff.compactor_serial)
+             : (eff.penetrometer_sn ?? "#3059-0325");
+         })(),
        }),
      });
      const payload = await response.json();
@@ -420,7 +428,12 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
          chainage,
          siteInspector,
          layers,
-         compactorSn: selectedLocation?.compactor_serial != null ? String(selectedLocation.compactor_serial) : (selectedLocation?.penetrometer_sn ?? "#3059-0325"),
+         compactorSn: (() => {
+           const eff = getEffectiveLocationFields(selectedLocation);
+           return eff.compactor_serial != null
+             ? String(eff.compactor_serial)
+             : (eff.penetrometer_sn ?? "#3059-0325");
+         })(),
        }),
      });
      const payload = await response.json();
@@ -583,12 +596,15 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
                   <span className="font-semibold">Penetrometer S/N:</span>
                   <Select
-                    value={
-                      selectedLocation?.penetrometer_sn ??
-                      (selectedLocation?.penetrometer_serial != null
-                        ? String(selectedLocation.penetrometer_serial)
-                        : "#3059-0325")
-                    }
+                    value={(() => {
+                      const eff = getEffectiveLocationFields(selectedLocation);
+                      return (
+                        eff.penetrometer_sn ??
+                        (eff.penetrometer_serial != null
+                          ? String(eff.penetrometer_serial)
+                          : "#3059-0325")
+                      );
+                    })()}
                     onValueChange={async (value) => {
                       if (!locationId) return;
                       const token = await getAccessToken();
@@ -604,7 +620,13 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                         setLocations((prev) =>
                           prev.map((loc) =>
                             loc.id === locationId
-                              ? { ...loc, penetrometer_sn: value }
+                              ? {
+                                  ...loc,
+                                  app_config: mergeLocationAppConfig(
+                                    loc.app_config,
+                                    { penetrometer_sn: value },
+                                  ),
+                                }
                               : loc,
                           ),
                         );
@@ -658,11 +680,17 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
-                          const current =
-                            selectedLocation?.penetrometer_sn ??
-                            (selectedLocation?.penetrometer_serial != null
-                              ? String(selectedLocation.penetrometer_serial)
-                              : "#3059-0325");
+                          const current = (() => {
+                            const eff = getEffectiveLocationFields(
+                              selectedLocation,
+                            );
+                            return (
+                              eff.penetrometer_sn ??
+                              (eff.penetrometer_serial != null
+                                ? String(eff.penetrometer_serial)
+                                : "#3059-0325")
+                            );
+                          })();
                           const p = penetrometerOptions.find(
                             (x) => x.serial_text === current,
                           );
@@ -914,7 +942,12 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                   setLocations((prev) =>
                     prev.map((loc) =>
                       loc.id === locationId
-                        ? { ...loc, penetrometer_sn: text }
+                        ? {
+                            ...loc,
+                            app_config: mergeLocationAppConfig(loc.app_config, {
+                              penetrometer_sn: text,
+                            }),
+                          }
                         : loc,
                     ),
                   );
@@ -995,7 +1028,8 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                 const payload = await res.json();
                 if (res.ok) {
                   const current =
-                    selectedLocation?.penetrometer_sn ?? "#3059-0325";
+                    getEffectiveLocationFields(selectedLocation).penetrometer_sn ??
+                    "#3059-0325";
                   const wasSelected =
                     penetrometerOptions.find(
                       (p) => p.id === penetrometerEditId,
@@ -1013,7 +1047,12 @@ const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
                     setLocations((prev) =>
                       prev.map((loc) =>
                         loc.id === locationId
-                          ? { ...loc, penetrometer_sn: text }
+                          ? {
+                              ...loc,
+                              app_config: mergeLocationAppConfig(loc.app_config, {
+                                penetrometer_sn: text,
+                              }),
+                            }
                           : loc,
                       ),
                     );

@@ -12,6 +12,7 @@ import { getHistoricalBlocksFromChainages } from "@/lib/psp-logic";
 import { renderCompactionHTML } from "@/lib/reports/compaction-html";
 import type { CompactionTemplateData } from "@/lib/reporting/compaction";
 import { isAdminEmail } from "@/lib/admin";
+import { getPenetrometerSnForTemplate } from "@/lib/location-app-config";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -112,25 +113,26 @@ async function resolveLocation(locationId: string | null, locationName: string |
   if (!resolvedLocationId && locationName) {
     const { data: locationRow, error } = await supabase
       .from("locations")
-      .select("id,name,penetrometer_sn")
+      .select("id,name,app_config")
       .eq("location_type", "psp")
       .eq("name", locationName)
       .maybeSingle();
     if (error || !locationRow) return null;
     resolvedLocationId = locationRow.id;
     resolvedLocationName = locationRow.name;
-    penetrometerSn = locationRow.penetrometer_sn ?? null;
+    penetrometerSn = getPenetrometerSnForTemplate(locationRow) || null;
   }
 
   if (resolvedLocationId && !resolvedLocationName) {
     const { data: locationRow } = await supabase
       .from("locations")
-      .select("name,penetrometer_sn")
+      .select("name,app_config")
       .eq("location_type", "psp")
       .eq("id", resolvedLocationId)
       .maybeSingle();
     resolvedLocationName = locationRow?.name ?? resolvedLocationId;
-    penetrometerSn = locationRow?.penetrometer_sn ?? penetrometerSn;
+    const fromRow = getPenetrometerSnForTemplate(locationRow ?? undefined);
+    penetrometerSn = fromRow || penetrometerSn;
   }
 
   return { locationId: resolvedLocationId, locationName: resolvedLocationName, penetrometerSn };
