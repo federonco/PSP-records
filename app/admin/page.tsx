@@ -719,7 +719,7 @@ type CompactionReportRow = {
     const mergedConfig = mergeLocationAppConfig(existingRow?.app_config, {
       chainage_increment: increment,
       data_source: "psp_records",
-      quality_reports_required: qualityReportsRequired,
+      quality_reports_required: Math.ceil(length / 200),
       penetrometer_sn: locationPenetrometerIdInput || null,
     });
 
