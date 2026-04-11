@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   const { data: section, error: secErr } = await supabase
     .from("sections")
-    .select("id,name")
+    .select("id,name,location_id")
     .eq("qr_token", token)
     .maybeSingle();
 
@@ -22,12 +22,18 @@ export async function GET(request: NextRequest) {
   }
 
   if (section) {
+    const locationId = section.location_id as string | null;
+    if (!locationId) {
+      return NextResponse.json(
+        { error: "Section has no location_id" },
+        { status: 500 },
+      );
+    }
     const { data: loc, error: locErr } = await supabase
       .from("locations")
       .select("id,name")
+      .eq("id", locationId)
       .eq("location_type", "psp")
-      .order("name")
-      .limit(1)
       .maybeSingle();
 
     if (locErr) {
@@ -35,13 +41,13 @@ export async function GET(request: NextRequest) {
     }
     if (!loc) {
       return NextResponse.json(
-        { error: "No PSP site configured" },
+        { error: "Location not found for section" },
         { status: 500 },
       );
     }
 
     return NextResponse.json({
-      locationId: loc.id as string,
+      locationId,
       locationName: (loc.name as string) ?? "",
       unifiedSectionId: section.id as string,
       subsectionId: null,
@@ -52,7 +58,7 @@ export async function GET(request: NextRequest) {
 
   const { data: sub, error: subErr } = await supabase
     .from("subsections")
-    .select("id,name,section_id,sections(id,name)")
+    .select("id,name,section_id,location_id,sections(id,name)")
     .eq("qr_token", token)
     .maybeSingle();
 
@@ -64,15 +70,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "invalid_token" }, { status: 404 });
   }
 
-  const parent = sub.sections as { id: string; name: string } | { id: string; name: string }[] | null;
-  const parentRow = Array.isArray(parent) ? parent[0] : parent;
+  const locationId = sub.location_id as string | null;
+  if (!locationId) {
+    return NextResponse.json(
+      { error: "Subsection has no location_id" },
+      { status: 500 },
+    );
+  }
 
   const { data: loc, error: locErr2 } = await supabase
     .from("locations")
     .select("id,name")
+    .eq("id", locationId)
     .eq("location_type", "psp")
-    .order("name")
-    .limit(1)
     .maybeSingle();
 
   if (locErr2) {
@@ -80,13 +90,19 @@ export async function GET(request: NextRequest) {
   }
   if (!loc) {
     return NextResponse.json(
-      { error: "No PSP site configured" },
+      { error: "Location not found for subsection" },
       { status: 500 },
     );
   }
 
+  const parent = sub.sections as
+    | { id: string; name: string }
+    | { id: string; name: string }[]
+    | null;
+  const parentRow = Array.isArray(parent) ? parent[0] : parent;
+
   return NextResponse.json({
-    locationId: loc.id as string,
+    locationId,
     locationName: (loc.name as string) ?? "",
     unifiedSectionId: (parentRow?.id ?? sub.section_id) as string,
     subsectionId: sub.id as string,

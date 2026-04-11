@@ -12,6 +12,7 @@ type SubsectionRow = {
   direction: string | null;
   qr_token: string | null;
   app_config: Record<string, unknown>;
+  location_id: string | null;
 };
 
 /** Service role client for sections / subsections (RLS). */
@@ -73,7 +74,7 @@ export async function GET(request: NextRequest) {
       const sid = row.id as string;
       const { data: subs, error: subsErr } = await supabase
         .from("subsections")
-        .select("id,name,start_ch,end_ch,direction,qr_token,app_config")
+        .select("id,name,start_ch,end_ch,direction,qr_token,app_config,location_id")
         .eq("section_id", sid)
         .eq("app_id", ONSITE_B)
         .order("name");
@@ -90,6 +91,7 @@ export async function GET(request: NextRequest) {
         direction: s.direction as string | null,
         qr_token: (s.qr_token as string | null) ?? null,
         app_config: (s.app_config as Record<string, unknown>) ?? {},
+        location_id: (s.location_id as string | null) ?? null,
       }));
 
       return {
@@ -101,6 +103,7 @@ export async function GET(request: NextRequest) {
         scope: String(row.scope ?? ""),
         app_config: (row.app_config as object) ?? {},
         qr_token: (row.qr_token as string | null) ?? null,
+        location_id: (row.location_id as string | null) ?? null,
         subsections,
       };
     }),

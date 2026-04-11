@@ -43,13 +43,13 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 
- type Location = {
+ type LocationRow = {
     id: string;
     name: string;
     app_config?: Record<string, unknown> | null;
   };
 
- type UnifiedSubsectionRow = {
+ type LodgeSubsectionRow = {
    id: string;
    name: string;
    start_ch: number | null;
@@ -57,9 +57,10 @@ import { Loader2 } from "lucide-react";
    direction: string | null;
    qr_token: string | null;
    app_config?: Record<string, unknown>;
+   location_id: string | null;
  };
 
- type UnifiedSectionRow = {
+ type LodgeSectionRow = {
    id: string;
    name: string;
    start_ch: number;
@@ -68,7 +69,8 @@ import { Loader2 } from "lucide-react";
    scope: string;
    app_config: Record<string, unknown>;
    qr_token: string | null;
-   subsections: UnifiedSubsectionRow[];
+   location_id: string | null;
+   subsections: LodgeSubsectionRow[];
  };
 
  type PenetrometerOption = { id: string; serial_text: string; sort_order: number };
@@ -102,33 +104,17 @@ type PspLodgeFormProps = {
   lockedEntry?: PspLodgeLockedEntry | null;
 };
 
-/** Subsection for a PSP location comes from subsection `app_config.location_id` (same rule as compaction sync). */
-function findSubsectionMatchForLocation(
-  sections: UnifiedSectionRow[],
-  locationId: string,
-): { subsectionId: string; sectionId: string } | null {
-  for (const sec of sections) {
-    for (const sub of sec.subsections ?? []) {
-      const lid = (sub.app_config as Record<string, unknown> | undefined)
-        ?.location_id;
-      if (typeof lid === "string" && lid === locationId) {
-        return { subsectionId: sub.id, sectionId: sec.id };
-      }
-    }
-  }
-  return null;
-}
-
 export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const supabase = getSupabaseBrowser();
    const { pushToast } = useToast();
   const router = useRouter();
    const [authEmail, setAuthEmail] = useState<string | null>(null);
-   const [locations, setLocations] = useState<Location[]>([]);
-   const [unifiedSections, setUnifiedSections] = useState<UnifiedSectionRow[]>([]);
-   const [locationId, setLocationId] = useState("");
-   const [locationName, setLocationName] = useState("");
-   const [unifiedSectionId, setUnifiedSectionId] = useState("");
+   const [sections, setSections] = useState<LodgeSectionRow[]>([]);
+   const [selectedSectionId, setSelectedSectionId] = useState("");
+   const [selectedSubsectionId, setSelectedSubsectionId] = useState<string | null>(
+     null,
+   );
+   const [activeLocation, setActiveLocation] = useState<LocationRow | null>(null);
   const [chainage, setChainage] = useState<number>(0);
   const [chainageDisplay, setChainageDisplay] = useState("0.00");
   const [chainageLoading, setChainageLoading] = useState(false);
@@ -166,19 +152,33 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     return refreshed.data.session?.access_token ?? null;
   };
 
-   const selectedLocation = useMemo(
-     () => locations.find((loc) => loc.id === locationId),
-     [locationId, locations],
-   );
+  const selectedSection = useMemo(
+    () => sections.find((s) => s.id === selectedSectionId) ?? null,
+    [sections, selectedSectionId],
+  );
 
-  const subsectionIdForApi = useMemo(() => {
-    if (lockedEntry) return lockedEntry.subsectionId;
-    if (!locationId || !unifiedSections.length) return null;
-    return findSubsectionMatchForLocation(unifiedSections, locationId)
-      ?.subsectionId ?? null;
-  }, [lockedEntry, locationId, unifiedSections]);
+  const selectedSubsection = useMemo(() => {
+    if (selectedSubsectionId == null) return null;
+    return (
+      selectedSection?.subsections?.find((s) => s.id === selectedSubsectionId) ??
+      null
+    );
+  }, [selectedSection, selectedSubsectionId]);
 
-  const locationSelectValue = locationId || undefined;
+  const locationId = useMemo(
+    () =>
+      selectedSubsection?.location_id ??
+      selectedSection?.location_id ??
+      null,
+    [selectedSubsection, selectedSection],
+  );
+
+  const subsectionIdForApi = selectedSubsectionId;
+
+  const unifiedSectionId = selectedSectionId;
+
+  const locationName =
+    activeLocation?.name ?? lockedEntry?.locationName ?? "";
 
    useEffect(() => {
      supabase.auth.getSession().then(({ data }) => {
@@ -201,61 +201,74 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [adminAuthOpen, authEmail, lockedEntry, router]);
 
   useEffect(() => {
-    if (lockedEntry) {
-      const loadLockedContext = async () => {
-        setUnifiedSectionId(lockedEntry.unifiedSectionId);
-        const { data, error } = await supabase
-          .from("locations")
-          .select(LOCATION_LIST_SELECT)
-          .eq("id", lockedEntry.locationId)
-          .eq("location_type", "psp")
-          .maybeSingle();
-        if (error || !data) {
+    let cancelled = false;
+    const load = async () => {
+      const token = await getAccessToken();
+      const response = await fetch("/api/psp/sections", {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        if (!cancelled) {
           pushToast({
             type: "error",
-            title: "Failed to load site",
-            message: error?.message ?? "Site not found",
+            title: "Failed to load sections",
+            message: payload.error ?? "Unable to load sections",
           });
-          return;
         }
-        setLocations([data]);
-        setLocationId(data.id);
-        setLocationName(data.name);
-      };
-      loadLockedContext();
+        return;
+      }
+      const list = (payload.sections ?? []) as LodgeSectionRow[];
+      if (!cancelled) {
+        setSections(list);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [pushToast]);
+
+  useEffect(() => {
+    if (!lockedEntry || !sections.length) return;
+    setSelectedSectionId(lockedEntry.unifiedSectionId);
+    setSelectedSubsectionId(lockedEntry.subsectionId);
+  }, [lockedEntry, sections]);
+
+  useEffect(() => {
+    if (lockedEntry || !sections.length) return;
+    setSelectedSectionId((prev) =>
+      prev && sections.some((s) => s.id === prev) ? prev : sections[0].id,
+    );
+  }, [lockedEntry, sections]);
+
+  useEffect(() => {
+    if (!locationId) {
+      setActiveLocation(null);
       return;
     }
-    const loadLocations = async () => {
+    const loadLoc = async () => {
       const { data, error } = await supabase
         .from("locations")
         .select(LOCATION_LIST_SELECT)
+        .eq("id", locationId)
         .eq("location_type", "psp")
-        .order("name");
-      if (error) {
-        pushToast({
-          type: "error",
-          title: "Failed to load sites",
-          message: error.message,
-        });
+        .maybeSingle();
+      if (error || !data) {
+        setActiveLocation(null);
+        if (error) {
+          pushToast({
+            type: "error",
+            title: "Failed to load location row",
+            message: error.message,
+          });
+        }
         return;
       }
-      setLocations(data ?? []);
-      if (data?.length) {
-        const defaultLoc =
-          data.find((loc) => loc.name === "McLennan Dr - SEC3") ?? data[0];
-        setLocationId(defaultLoc.id);
-        setLocationName(defaultLoc.name);
-      }
+      setActiveLocation(data as LocationRow);
     };
-    loadLocations();
-  }, [lockedEntry, pushToast, supabase]);
-
-
-   useEffect(() => {
-     if (selectedLocation) {
-       setLocationName(selectedLocation.name);
-     }
-   }, [selectedLocation]);
+    void loadLoc();
+  }, [locationId, pushToast, supabase]);
 
   useEffect(() => {
     if (!locationId) return;
@@ -276,58 +289,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     };
     loadOptions();
   }, [locationId]);
-
-  useEffect(() => {
-    if (!locationId) return;
-    if (lockedEntry) return;
-    const loadSections = async () => {
-      const token = await getAccessToken();
-      const response = await fetch("/api/psp/sections", {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      const payload = await response.json();
-      if (!response.ok) {
-        pushToast({
-          type: "error",
-          title: "Failed to load sections",
-          message: payload.error ?? "Unable to load sections",
-        });
-        return;
-      }
-      const list = (payload.sections ?? []) as UnifiedSectionRow[];
-      setUnifiedSections(list);
-      if (!list.length) {
-        setUnifiedSectionId("");
-      }
-    };
-    loadSections();
-  }, [locationId, lockedEntry, pushToast, supabase]);
-
-  useEffect(() => {
-    if (lockedEntry || !locationId || !unifiedSections.length) return;
-    const match = findSubsectionMatchForLocation(unifiedSections, locationId);
-    if (match) {
-      setUnifiedSectionId(match.sectionId);
-      return;
-    }
-    const loc = locations.find((l) => l.id === locationId);
-    const raw = loc?.app_config;
-    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-      const uid = (raw as Record<string, unknown>).unified_section_id;
-      if (
-        typeof uid === "string" &&
-        unifiedSections.some((s) => s.id === uid)
-      ) {
-        setUnifiedSectionId(uid);
-        return;
-      }
-    }
-    setUnifiedSectionId((prev) =>
-      prev && unifiedSections.some((s) => s.id === prev)
-        ? prev
-        : (unifiedSections[0]?.id ?? ""),
-    );
-  }, [lockedEntry, locationId, unifiedSections, locations]);
 
   useEffect(() => {
     if (!locationId || !unifiedSectionId) {
@@ -476,7 +437,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          siteInspector,
          layers,
          compactorSn: (() => {
-           const eff = getEffectiveLocationFields(selectedLocation);
+           const eff = getEffectiveLocationFields(activeLocation ?? undefined);
            return eff.compactor_serial != null
              ? String(eff.compactor_serial)
              : (eff.penetrometer_sn ?? "#3059-0325");
@@ -565,7 +526,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          siteInspector,
          layers,
          compactorSn: (() => {
-           const eff = getEffectiveLocationFields(selectedLocation);
+           const eff = getEffectiveLocationFields(activeLocation ?? undefined);
            return eff.compactor_serial != null
              ? String(eff.compactor_serial)
              : (eff.penetrometer_sn ?? "#3059-0325");
@@ -655,51 +616,30 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           </div>
         </header>
 
-        {lockedEntry ? (
-          <div className="psp-outer space-y-3">
+        <div className="psp-outer space-y-3">
+          {lockedEntry ? (
             <div>
               <div className="psp-section-label">Section</div>
               <p className="mt-[14px] text-sm font-semibold text-[var(--ink)]">
                 {lockedEntry.sectionName}
               </p>
             </div>
-          </div>
-        ) : (
-          <div className="psp-outer space-y-3">
-            <div>
-              <div className="psp-section-label">Site</div>
-              <Select
-                value={locationSelectValue}
-                onValueChange={(value) => setLocationId(value)}
-              >
-                <SelectTrigger
-                  className={`psp-input mt-[14px] w-full bg-[var(--inner-bg)] ${locationId ? "psp-select-location-filled" : ""}`}
-                >
-                  <SelectValue placeholder="Select site" />
-                </SelectTrigger>
-                <SelectContent className="w-[360px] -mt-[2px] p-0">
-                  {locations.map((loc) => (
-                    <SelectItem key={loc.id} value={loc.id} className="h-10 items-center">
-                      {loc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          ) : (
             <div>
               <div className="psp-section-label">Section</div>
               <Select
-                value={unifiedSectionId || undefined}
+                value={selectedSectionId || undefined}
                 onValueChange={(value) => {
-                  setUnifiedSectionId(value);
+                  setSelectedSectionId(value);
+                  setSelectedSubsectionId(null);
                 }}
-                disabled={!unifiedSections.length}
+                disabled={!sections.length}
               >
                 <SelectTrigger className="psp-input mt-[14px] w-full bg-[var(--inner-bg)]">
                   <SelectValue placeholder="Select section" />
                 </SelectTrigger>
                 <SelectContent>
-                  {unifiedSections.map((s) => (
+                  {sections.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
                     </SelectItem>
@@ -707,8 +647,39 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                 </SelectContent>
               </Select>
             </div>
-          </div>
-        )}
+          )}
+
+          {selectedSection &&
+          (selectedSection.subsections?.length ?? 0) > 0 ? (
+            <div>
+              <div className="psp-section-label">Subsection</div>
+              {lockedEntry && lockedEntry.subsectionId != null ? (
+                <p className="mt-[14px] text-sm font-semibold text-[var(--ink)]">
+                  {lockedEntry.subsectionName ?? "—"}
+                </p>
+              ) : (
+                <Select
+                  value={selectedSubsectionId ?? "__none__"}
+                  onValueChange={(v) =>
+                    setSelectedSubsectionId(v === "__none__" ? null : v)
+                  }
+                >
+                  <SelectTrigger className="psp-input mt-[14px] w-full bg-[var(--inner-bg)]">
+                    <SelectValue placeholder="Subsection" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {selectedSection.subsections.map((sub) => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        {sub.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          ) : null}
+        </div>
 
         <div className="psp-outer">
           <div className="psp-section-label">Current chainage (m)</div>
@@ -768,7 +739,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                   <span className="font-semibold">Penetrometer S/N:</span>
                   <Select
                     value={(() => {
-                      const eff = getEffectiveLocationFields(selectedLocation);
+                      const eff = getEffectiveLocationFields(activeLocation ?? undefined);
                       return (
                         eff.penetrometer_sn ??
                         (eff.penetrometer_serial != null
@@ -788,18 +759,16 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                         body: JSON.stringify({ penetrometerSn: value }),
                       });
                       if (res.ok) {
-                        setLocations((prev) =>
-                          prev.map((loc) =>
-                            loc.id === locationId
-                              ? {
-                                  ...loc,
-                                  app_config: mergeLocationAppConfig(
-                                    loc.app_config,
-                                    { penetrometer_sn: value },
-                                  ),
-                                }
-                              : loc,
-                          ),
+                        setActiveLocation((prev) =>
+                          prev && prev.id === locationId
+                            ? {
+                                ...prev,
+                                app_config: mergeLocationAppConfig(
+                                  prev.app_config,
+                                  { penetrometer_sn: value },
+                                ),
+                              }
+                            : prev,
                         );
                       } else {
                         const payload = await res.json();
@@ -853,7 +822,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                         onClick={() => {
                           const current = (() => {
                             const eff = getEffectiveLocationFields(
-                              selectedLocation,
+                              activeLocation ?? undefined,
                             );
                             return (
                               eff.penetrometer_sn ??
@@ -1110,17 +1079,15 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                       (a, b) => a.sort_order - b.sort_order,
                     ),
                   );
-                  setLocations((prev) =>
-                    prev.map((loc) =>
-                      loc.id === locationId
-                        ? {
-                            ...loc,
-                            app_config: mergeLocationAppConfig(loc.app_config, {
-                              penetrometer_sn: text,
-                            }),
-                          }
-                        : loc,
-                    ),
+                  setActiveLocation((prev) =>
+                    prev && prev.id === locationId
+                      ? {
+                          ...prev,
+                          app_config: mergeLocationAppConfig(prev.app_config, {
+                            penetrometer_sn: text,
+                          }),
+                        }
+                      : prev,
                   );
                   setPenetrometerAddOpen(false);
                   pushToast({ type: "success", title: "Penetrometer added" });
@@ -1199,7 +1166,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                 const payload = await res.json();
                 if (res.ok) {
                   const current =
-                    getEffectiveLocationFields(selectedLocation).penetrometer_sn ??
+                    getEffectiveLocationFields(activeLocation ?? undefined).penetrometer_sn ??
                     "#3059-0325";
                   const wasSelected =
                     penetrometerOptions.find(
@@ -1215,17 +1182,15 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                       .sort((a, b) => a.sort_order - b.sort_order),
                   );
                   if (wasSelected) {
-                    setLocations((prev) =>
-                      prev.map((loc) =>
-                        loc.id === locationId
-                          ? {
-                              ...loc,
-                              app_config: mergeLocationAppConfig(loc.app_config, {
-                                penetrometer_sn: text,
-                              }),
-                            }
-                          : loc,
-                      ),
+                    setActiveLocation((prev) =>
+                      prev && prev.id === locationId
+                        ? {
+                            ...prev,
+                            app_config: mergeLocationAppConfig(prev.app_config, {
+                              penetrometer_sn: text,
+                            }),
+                          }
+                        : prev,
                     );
                   }
                   setPenetrometerEditOpen(false);

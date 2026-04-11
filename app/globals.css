@@ -317,13 +317,6 @@ body {
     border-color: var(--color-border-soft) !important;
     box-shadow: 0 0 0 3px var(--ring-soft) !important;
   }
-  /* Location select: borde y ring #D3DAE1 cuando hay location seleccionada */
-  button.psp-select-location-filled,
-  button.psp-select-location-filled:focus,
-  button.psp-select-location-filled:focus-visible {
-    border-color: var(--color-border-soft) !important;
-    box-shadow: 0 0 0 3px var(--ring-soft) !important;
-  }
   /* Input en diálogos: borde/ring al enfocar en #D3DAE1 (en vez del rojo primary) */
   .psp-input-dialog:focus,
   .psp-input-dialog:focus-visible {

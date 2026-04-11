@@ -65,6 +65,7 @@ type UnifiedSubsectionRow = {
   direction: string | null;
   qr_token: string | null;
   app_config?: Record<string, unknown> | null;
+  location_id?: string | null;
 };
 
 type UnifiedSectionRow = {
@@ -76,6 +77,7 @@ type UnifiedSectionRow = {
   scope: string;
   app_config: Record<string, unknown>;
   qr_token: string | null;
+  location_id?: string | null;
   subsections: UnifiedSubsectionRow[];
 };
 
