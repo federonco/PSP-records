@@ -56,6 +56,7 @@ import { Loader2 } from "lucide-react";
    end_ch: number | null;
    direction: string | null;
    qr_token: string | null;
+   app_config?: Record<string, unknown>;
  };
 
  type UnifiedSectionRow = {
@@ -101,6 +102,23 @@ type PspLodgeFormProps = {
   lockedEntry?: PspLodgeLockedEntry | null;
 };
 
+/** Subsection for a PSP location comes from subsection `app_config.location_id` (same rule as compaction sync). */
+function findSubsectionMatchForLocation(
+  sections: UnifiedSectionRow[],
+  locationId: string,
+): { subsectionId: string; sectionId: string } | null {
+  for (const sec of sections) {
+    for (const sub of sec.subsections ?? []) {
+      const lid = (sub.app_config as Record<string, unknown> | undefined)
+        ?.location_id;
+      if (typeof lid === "string" && lid === locationId) {
+        return { subsectionId: sub.id, sectionId: sec.id };
+      }
+    }
+  }
+  return null;
+}
+
 export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const supabase = getSupabaseBrowser();
    const { pushToast } = useToast();
@@ -111,8 +129,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const [locationId, setLocationId] = useState("");
    const [locationName, setLocationName] = useState("");
    const [unifiedSectionId, setUnifiedSectionId] = useState("");
-   /** "__none__" = records at section level only (subsection_id null) */
-   const [subsectionSelect, setSubsectionSelect] = useState<string>("__none__");
   const [chainage, setChainage] = useState<number>(0);
   const [chainageDisplay, setChainageDisplay] = useState("0.00");
   const [chainageLoading, setChainageLoading] = useState(false);
@@ -155,15 +171,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      [locationId, locations],
    );
 
-  const selectedUnifiedSection = useMemo(
-    () => unifiedSections.find((s) => s.id === unifiedSectionId),
-    [unifiedSections, unifiedSectionId],
-  );
-
-  const subsectionIdForApi =
-    subsectionSelect && subsectionSelect !== "__none__"
-      ? subsectionSelect
-      : null;
+  const subsectionIdForApi = useMemo(() => {
+    if (lockedEntry) return lockedEntry.subsectionId;
+    if (!locationId || !unifiedSections.length) return null;
+    return findSubsectionMatchForLocation(unifiedSections, locationId)
+      ?.subsectionId ?? null;
+  }, [lockedEntry, locationId, unifiedSections]);
 
   const locationSelectValue = locationId || undefined;
 
@@ -191,7 +204,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     if (lockedEntry) {
       const loadLockedContext = async () => {
         setUnifiedSectionId(lockedEntry.unifiedSectionId);
-        setSubsectionSelect(lockedEntry.subsectionId ?? "__none__");
         const { data, error } = await supabase
           .from("locations")
           .select(LOCATION_LIST_SELECT)
@@ -284,16 +296,38 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       }
       const list = (payload.sections ?? []) as UnifiedSectionRow[];
       setUnifiedSections(list);
-      if (list.length) {
-        setUnifiedSectionId(list[0].id);
-        setSubsectionSelect("__none__");
-      } else {
+      if (!list.length) {
         setUnifiedSectionId("");
-        setSubsectionSelect("__none__");
       }
     };
     loadSections();
   }, [locationId, lockedEntry, pushToast, supabase]);
+
+  useEffect(() => {
+    if (lockedEntry || !locationId || !unifiedSections.length) return;
+    const match = findSubsectionMatchForLocation(unifiedSections, locationId);
+    if (match) {
+      setUnifiedSectionId(match.sectionId);
+      return;
+    }
+    const loc = locations.find((l) => l.id === locationId);
+    const raw = loc?.app_config;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const uid = (raw as Record<string, unknown>).unified_section_id;
+      if (
+        typeof uid === "string" &&
+        unifiedSections.some((s) => s.id === uid)
+      ) {
+        setUnifiedSectionId(uid);
+        return;
+      }
+    }
+    setUnifiedSectionId((prev) =>
+      prev && unifiedSections.some((s) => s.id === prev)
+        ? prev
+        : (unifiedSections[0]?.id ?? ""),
+    );
+  }, [lockedEntry, locationId, unifiedSections, locations]);
 
   useEffect(() => {
     if (!locationId || !unifiedSectionId) {
@@ -621,34 +655,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           </div>
         </header>
 
-        <div className="psp-outer">
-          <div className="psp-section-label">Site</div>
-
-          {lockedEntry ? (
-            <p className="mt-[14px] mb-[2px] rounded-[12px] border border-[var(--input-border)] bg-[var(--inner-bg)] px-4 py-2.5 text-sm font-medium text-[var(--ink)]">
-              {lockedEntry.locationName}
-            </p>
-          ) : (
-            <Select
-              value={locationSelectValue}
-              onValueChange={(value) => setLocationId(value)}
-            >
-              <SelectTrigger
-                className={`psp-input mt-[14px] mb-[2px] w-full bg-[var(--inner-bg)] ${locationId ? "psp-select-location-filled" : ""}`}
-              >
-                <SelectValue placeholder="Select site" />
-              </SelectTrigger>
-              <SelectContent className="w-[360px] -mt-[2px] p-0">
-                {locations.map((loc) => (
-                  <SelectItem key={loc.id} value={loc.id} className="h-10 items-center">
-                    {loc.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-
         {lockedEntry ? (
           <div className="psp-outer space-y-3">
             <div>
@@ -657,24 +663,35 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                 {lockedEntry.sectionName}
               </p>
             </div>
-            {lockedEntry.subsectionName ? (
-              <div>
-                <div className="psp-section-label">Subsection</div>
-                <p className="mt-[14px] text-sm font-semibold text-[var(--ink)]">
-                  {lockedEntry.subsectionName}
-                </p>
-              </div>
-            ) : null}
           </div>
         ) : (
           <div className="psp-outer space-y-3">
+            <div>
+              <div className="psp-section-label">Site</div>
+              <Select
+                value={locationSelectValue}
+                onValueChange={(value) => setLocationId(value)}
+              >
+                <SelectTrigger
+                  className={`psp-input mt-[14px] w-full bg-[var(--inner-bg)] ${locationId ? "psp-select-location-filled" : ""}`}
+                >
+                  <SelectValue placeholder="Select site" />
+                </SelectTrigger>
+                <SelectContent className="w-[360px] -mt-[2px] p-0">
+                  {locations.map((loc) => (
+                    <SelectItem key={loc.id} value={loc.id} className="h-10 items-center">
+                      {loc.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <div className="psp-section-label">Section</div>
               <Select
                 value={unifiedSectionId || undefined}
                 onValueChange={(value) => {
                   setUnifiedSectionId(value);
-                  setSubsectionSelect("__none__");
                 }}
                 disabled={!unifiedSections.length}
               >
@@ -690,28 +707,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                 </SelectContent>
               </Select>
             </div>
-            {selectedUnifiedSection &&
-            (selectedUnifiedSection.subsections?.length ?? 0) > 0 ? (
-              <div>
-                <div className="psp-section-label">Subsection</div>
-                <Select
-                  value={subsectionSelect}
-                  onValueChange={setSubsectionSelect}
-                >
-                  <SelectTrigger className="psp-input mt-[14px] w-full bg-[var(--inner-bg)]">
-                    <SelectValue placeholder="Subsection" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">None / Section level</SelectItem>
-                    {selectedUnifiedSection.subsections.map((sub) => (
-                      <SelectItem key={sub.id} value={sub.id}>
-                        {sub.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
           </div>
         )}
 

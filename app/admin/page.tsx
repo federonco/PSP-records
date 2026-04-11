@@ -1406,7 +1406,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
         {siteExpanded ? (
           <div className="mt-4 border-t border-[var(--border)] pt-4">
-            <div className="mb-3 rounded-[var(--radius)] bg-[#F7F9FB] p-3 text-[var(--ink)]">
+            <div className="mb-3 rounded-[var(--radius)] border border-[var(--border)]/70 bg-[var(--surface)] p-3 text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold">{titleText}</p>
                 <div className="flex gap-2 text-xs">
@@ -1451,7 +1451,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
             </div>
 
             {scopeReports.length ? (
-              <div className="max-h-[280px] space-y-3 overflow-y-auto pr-1">
+              <div className="max-h-[280px] space-y-3 overflow-y-auto rounded-[12px] border border-[var(--border)]/60 bg-[var(--surface)] p-2 pr-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
                 {scopeReports.map((report) => {
                   const range = report.block_key.replace("-", " → ");
                   const isOpen = report.status === "OPEN";
