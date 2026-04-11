@@ -7,11 +7,14 @@ import {
 } from "@/lib/psp-logic";
 
 export async function GET(request: NextRequest) {
-  const { user, token } = await getUserFromRequest(request);
+  const { token } = await getUserFromRequest(request);
 
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get("locationId");
   const locationName = searchParams.get("location");
+  const unifiedSectionId = searchParams.get("unifiedSectionId")?.trim() || null;
+  const subsectionId = searchParams.get("subsectionId")?.trim() || null;
+
   const resolvedLocationId = await resolveLocationId({
     locationId,
     locationName,
@@ -22,13 +25,30 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Missing location" }, { status: 400 });
   }
 
+  if (!unifiedSectionId) {
+    return NextResponse.json(
+      { error: "Missing unifiedSectionId" },
+      { status: 400 },
+    );
+  }
+
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
-  const { data, error } = await supabase
+
+  let q = supabase
      .from("psp_records")
      .select("chainage")
-    .eq("location_id", resolvedLocationId)
+     .eq("location_id", resolvedLocationId)
+    .eq("unified_section_id", unifiedSectionId);
+
+  if (subsectionId) {
+    q = q.eq("subsection_id", subsectionId);
+  } else {
+    q = q.is("subsection_id", null);
+  }
+
+  const { data, error } = await q
      .order("chainage", { ascending: false })
     .limit(5000);
 

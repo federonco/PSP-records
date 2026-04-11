@@ -2,29 +2,111 @@ import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
+const ONSITE_B = "onsite-b";
+
+type SubsectionRow = {
+  id: string;
+  name: string;
+  start_ch: number | null;
+  end_ch: number | null;
+  direction: string | null;
+  qr_token: string | null;
+  app_config: Record<string, unknown>;
+};
+
+/** Service role client for sections / subsections (RLS). */
+function sr() {
+  return getSupabaseServer({ useServiceRole: true });
+}
+
 export async function GET(request: NextRequest) {
-  const { token } = await getUserFromRequest(request);
+  void request;
+  const supabase = sr();
 
-  const { searchParams } = new URL(request.url);
-  const locationId = searchParams.get("locationId");
-  if (!locationId) {
-    return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
+  const { data: subLinks, error: subErr } = await supabase
+    .from("subsections")
+    .select("section_id")
+    .eq("app_id", ONSITE_B);
+
+  if (subErr) {
+    return NextResponse.json({ error: subErr.message }, { status: 500 });
   }
 
-  const supabase = token
-    ? getSupabaseServer({ accessToken: token })
-    : getSupabaseServer({ useServiceRole: true });
-  const { data, error } = await supabase
-    .from("psp_sections")
-    .select("id,name")
-    .eq("location_id", locationId)
-    .order("name");
+  const idsFromSubs = [
+    ...new Set(
+      (subLinks ?? []).map((r: { section_id: string }) => r.section_id),
+    ),
+  ];
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  const { data: sharedRows, error: sharedErr } = await supabase
+    .from("sections")
+    .select("*")
+    .eq("scope", "shared");
+
+  if (sharedErr) {
+    return NextResponse.json({ error: sharedErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ sections: data ?? [] });
+  let fromSubs: Record<string, unknown>[] = [];
+  if (idsFromSubs.length) {
+    const { data: fs, error: fsErr } = await supabase
+      .from("sections")
+      .select("*")
+      .in("id", idsFromSubs);
+    if (fsErr) {
+      return NextResponse.json({ error: fsErr.message }, { status: 500 });
+    }
+    fromSubs = fs ?? [];
+  }
+
+  const merged = new Map<string, Record<string, unknown>>();
+  for (const r of [...(sharedRows ?? []), ...fromSubs]) {
+    merged.set(r.id as string, r as Record<string, unknown>);
+  }
+
+  const sectionList = Array.from(merged.values()).sort((a, b) =>
+    String(a.name ?? "").localeCompare(String(b.name ?? "")),
+  );
+
+  const sections = await Promise.all(
+    sectionList.map(async (row) => {
+      const sid = row.id as string;
+      const { data: subs, error: subsErr } = await supabase
+        .from("subsections")
+        .select("id,name,start_ch,end_ch,direction,qr_token,app_config")
+        .eq("section_id", sid)
+        .eq("app_id", ONSITE_B)
+        .order("name");
+
+      if (subsErr) {
+        throw new Error(subsErr.message);
+      }
+
+      const subsections: SubsectionRow[] = (subs ?? []).map((s) => ({
+        id: s.id as string,
+        name: s.name as string,
+        start_ch: s.start_ch as number | null,
+        end_ch: s.end_ch as number | null,
+        direction: s.direction as string | null,
+        qr_token: (s.qr_token as string | null) ?? null,
+        app_config: (s.app_config as Record<string, unknown>) ?? {},
+      }));
+
+      return {
+        id: sid,
+        name: row.name as string,
+        start_ch: row.start_ch as number,
+        end_ch: row.end_ch as number,
+        direction: String(row.direction ?? ""),
+        scope: String(row.scope ?? ""),
+        app_config: (row.app_config as object) ?? {},
+        qr_token: (row.qr_token as string | null) ?? null,
+        subsections,
+      };
+    }),
+  );
+
+  return NextResponse.json({ sections });
 }
 
 export async function POST(request: NextRequest) {
@@ -33,23 +115,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
-  const { locationId, name } = body;
-
-  if (!locationId || !name) {
-    return NextResponse.json({ error: "Missing section data" }, { status: 400 });
-  }
-
-  const supabase = getSupabaseServer({ accessToken: token });
-  const { data, error } = await supabase
-    .from("psp_sections")
-    .insert({ location_id: locationId, name })
-    .select("id,name")
-    .single();
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ section: data });
+  return NextResponse.json(
+    { error: "Creating unified sections via API is not supported." },
+    { status: 400 },
+  );
 }

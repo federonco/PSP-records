@@ -10,6 +10,8 @@ export async function GET(request: NextRequest) {
   const locationId = searchParams.get("locationId");
   const locationName = searchParams.get("location");
   const chainage = Number(searchParams.get("chainage"));
+  const unifiedSectionId = searchParams.get("unifiedSectionId")?.trim() || null;
+  const subsectionId = searchParams.get("subsectionId")?.trim() || null;
 
   const resolvedLocationId = await resolveLocationId({
     locationId,
@@ -27,12 +29,25 @@ export async function GET(request: NextRequest) {
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
-   const { data, error } = await supabase
+
+   let q = supabase
      .from("psp_records")
     .select("id,sign_off_by,sign_off_at,signature_strokes")
     .eq("location_id", resolvedLocationId)
-     .eq("chainage", chainage)
-     .maybeSingle();
+     .eq("chainage", chainage);
+
+  if (unifiedSectionId) {
+    q = q.eq("unified_section_id", unifiedSectionId);
+  } else {
+    q = q.is("unified_section_id", null);
+  }
+  if (subsectionId) {
+    q = q.eq("subsection_id", subsectionId);
+  } else {
+    q = q.is("subsection_id", null);
+  }
+
+  const { data, error } = await q.maybeSingle();
 
    if (error) {
      return NextResponse.json({ error: error.message }, { status: 500 });

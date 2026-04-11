@@ -13,7 +13,9 @@ export type CleanRecordInput = {
   chainage: number;
   siteInspector: string;
   layers: Record<string, number>;
-  sectionId?: string | null;
+  /** Unified `sections.id` (replaces legacy psp_sections.section_id). */
+  unifiedSectionId?: string | null;
+  subsectionId?: string | null;
   compactorSn?: string | null;
 };
 
@@ -59,7 +61,8 @@ export function validateSaveData(input: Record<string, unknown>) {
     chainage: 0,
     siteInspector: "",
     layers: {},
-    sectionId: null,
+    unifiedSectionId: null,
+    subsectionId: null,
   };
 
   const locationId = String(input.locationId ?? "").trim();
@@ -97,7 +100,15 @@ export function validateSaveData(input: Record<string, unknown>) {
     clean.layers[key] = num;
   });
 
-  clean.sectionId = String(input.sectionId ?? "").trim() || null;
+  const unified =
+    String(input.unifiedSectionId ?? input.sectionId ?? "").trim() || null;
+  clean.unifiedSectionId = unified;
+  clean.subsectionId =
+    String(input.subsectionId ?? "").trim() || null;
+
+  if (!clean.unifiedSectionId) {
+    errors.push("Section is required");
+  }
 
   const compactorRaw = input.compactorSn;
   if (compactorRaw !== undefined && compactorRaw !== null && compactorRaw !== "") {

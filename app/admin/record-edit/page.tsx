@@ -40,7 +40,8 @@
 
  type RecordPayload = {
    location_id: string;
-   section_id: string | null;
+   unified_section_id: string | null;
+   subsection_id: string | null;
    chainage: number;
    site_inspector: string;
    sign_off_by?: string | null;
@@ -125,7 +126,8 @@ function RecordEditContent() {
          locationId: record.location_id,
          chainage: record.chainage,
          siteInspector,
-         sectionId: record.section_id,
+         unifiedSectionId: record.unified_section_id,
+         subsectionId: record.subsection_id,
          layers: Object.fromEntries(
            layerFields.map((field) => [field.key, Number(layers[field.key])]),
          ),

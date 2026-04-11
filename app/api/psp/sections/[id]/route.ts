@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isAdminEmail } from "@/lib/admin";
 import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -11,6 +12,9 @@ export async function PUT(
   if (!user || !token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!isAdminEmail(user.email)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await request.json();
   const { name } = body;
@@ -18,9 +22,9 @@ export async function PUT(
     return NextResponse.json({ error: "Missing section name" }, { status: 400 });
   }
 
-  const supabase = getSupabaseServer({ accessToken: token });
+  const supabase = getSupabaseServer({ useServiceRole: true });
   const { data, error } = await supabase
-    .from("psp_sections")
+    .from("sections")
     .update({ name })
     .eq("id", id)
     .select("id,name")

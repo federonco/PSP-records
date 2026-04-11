@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabase
     .from("psp_records")
     .select(
-      "location_id,section_id,chainage,site_inspector,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,signature_strokes,sign_off_by,sign_off_at",
+      "location_id,unified_section_id,subsection_id,chainage,site_inspector,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,signature_strokes,sign_off_by,sign_off_at",
     )
     .eq("location_id", locationId)
     .eq("chainage", chainage)

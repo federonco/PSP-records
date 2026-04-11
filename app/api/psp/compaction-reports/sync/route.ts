@@ -9,6 +9,8 @@ import { getPenetrometerSnForTemplate } from "@/lib/location-app-config";
 
 export const runtime = "nodejs";
 
+const ONSITE_B_APP = "onsite-b";
+
 type RecordRow = {
   chainage: number;
   recorded_at: string;
@@ -102,6 +104,47 @@ export async function POST(request: NextRequest) {
   const resolvedLocationName =
     locationName ?? locationRow?.name ?? locationId;
 
+  const { data: allSubsections } = await supabase
+    .from("subsections")
+    .select("id,section_id,app_config")
+    .eq("app_id", ONSITE_B_APP);
+
+  const subsectionMatch = (allSubsections ?? []).find((ss) => {
+    const cfg = ss.app_config as Record<string, unknown> | null | undefined;
+    const lid = cfg?.location_id;
+    return typeof lid === "string" && lid === locationId;
+  });
+
+  let unified_section_id: string | null = null;
+  let subsection_id: string | null = null;
+
+  if (subsectionMatch) {
+    unified_section_id = subsectionMatch.section_id as string;
+    subsection_id = subsectionMatch.id as string;
+  } else {
+    const { data: sampleRec } = await supabase
+      .from("psp_records")
+      .select("unified_section_id")
+      .eq("location_id", locationId)
+      .not("unified_section_id", "is", null)
+      .limit(1)
+      .maybeSingle();
+
+    if (sampleRec?.unified_section_id) {
+      unified_section_id = sampleRec.unified_section_id as string;
+    } else {
+      const { data: sharedSec } = await supabase
+        .from("sections")
+        .select("id")
+        .eq("scope", "shared")
+        .order("name")
+        .limit(1)
+        .maybeSingle();
+      unified_section_id = (sharedSec?.id as string) ?? null;
+    }
+    subsection_id = null;
+  }
+
   const { data: records, error } = await supabase
     .from("psp_records")
     .select(
@@ -155,6 +198,8 @@ export async function POST(request: NextRequest) {
       reportMap.get(block.blockKey) ?? reportIndexMap.get(block.index);
     const basePayload = {
       location_id: locationId,
+      unified_section_id,
+      subsection_id,
       report_type: "compaction",
       block_key: block.blockKey,
       status: block.status,
@@ -278,5 +323,7 @@ export async function POST(request: NextRequest) {
     generated,
     open,
     total: blocks.length,
+    unified_section_id,
+    subsection_id,
   });
 }

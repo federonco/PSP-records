@@ -23,6 +23,8 @@ export async function POST(request: NextRequest) {
     chainage,
     siteInspector,
     layers,
+    unifiedSectionId,
+    subsectionId,
     sectionId,
     compactorSn,
   } = body;
@@ -72,10 +74,20 @@ export async function POST(request: NextRequest) {
       ? String(compactorSn).trim()
       : null;
 
+  const unified =
+    (unifiedSectionId != null && String(unifiedSectionId).trim()) ||
+    (sectionId != null && String(sectionId).trim()) ||
+    null;
+  const sub =
+    subsectionId != null && String(subsectionId).trim()
+      ? String(subsectionId).trim()
+      : null;
+
   const { error } = await supabase
     .from("psp_records")
     .update({
-      section_id: sectionId ?? null,
+      unified_section_id: unified,
+      subsection_id: sub,
       site_inspector: siteInspector,
       compactor_sn: compactorSnValue || null,
       ...layerPayload,

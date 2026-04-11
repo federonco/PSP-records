@@ -29,7 +29,8 @@ import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
 const { error } = await supabase.from("psp_records").upsert(
   {
     location_id: resolvedLocationId,
-    section_id: validation.clean.sectionId ?? null,
+    unified_section_id: validation.clean.unifiedSectionId ?? null,
+    subsection_id: validation.clean.subsectionId ?? null,
       chainage: validation.clean.chainage,
       site_inspector: validation.clean.siteInspector,
       compactor_sn: validation.clean.compactorSn ?? null,
