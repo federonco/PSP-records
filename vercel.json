@@ -1,8 +1,12 @@
 {
   "functions": {
+    "app/api/drainer/sections/send-qr/route.ts": {
+      "memory": 512,
+      "maxDuration": 15
+    },
     "app/api/psp/sections/send-qr/route.ts": {
-      "memory": 1024,
-      "maxDuration": 30
+      "memory": 512,
+      "maxDuration": 15
     }
   }
 }
