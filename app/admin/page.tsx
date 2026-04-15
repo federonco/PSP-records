@@ -66,6 +66,7 @@ type UnifiedSubsectionRow = {
   qr_token: string | null;
   app_config?: Record<string, unknown> | null;
   location_id?: string | null;
+  source_kind?: "subsection" | "section";
 };
 
 type UnifiedSectionRow = {
@@ -84,6 +85,18 @@ type UnifiedSectionRow = {
 type SendQrTarget =
   | { kind: "section"; section: UnifiedSectionRow }
   | { kind: "subsection"; subsection: UnifiedSubsectionRow; sectionName: string };
+
+function getSectionFamilyKey(name: string): string | null {
+  const direct = /^\s*section\s+(\d+)\s*$/i.exec(name);
+  if (direct?.[1]) return direct[1];
+  const dotted = /^\s*section\s+(\d+)\.(\d+)\b/i.exec(name);
+  if (dotted?.[1]) return dotted[1];
+  return null;
+}
+
+function isDottedSectionName(name: string): boolean {
+  return /^\s*section\s+\d+\.\d+\b/i.test(name);
+}
 
 type CompactionReportRow = {
   id: string;
@@ -285,15 +298,63 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     [locations],
   );
 
+  const normalizedSections = useMemo(() => {
+    const cloned = unifiedSections.map((section) => ({
+      ...section,
+      subsections: (section.subsections ?? []).map((sub) => ({
+        ...sub,
+        source_kind: sub.source_kind ?? "subsection",
+      })),
+    }));
+    const familyParents = new Map<string, UnifiedSectionRow>();
+    for (const section of cloned) {
+      const family = getSectionFamilyKey(section.name);
+      if (!family || isDottedSectionName(section.name)) continue;
+      familyParents.set(family, section);
+    }
+    const promoted = new Set<string>();
+    for (const section of cloned) {
+      if (!isDottedSectionName(section.name)) continue;
+      const family = getSectionFamilyKey(section.name);
+      if (!family) continue;
+      const parent = familyParents.get(family);
+      if (!parent || parent.id === section.id) continue;
+      parent.subsections = [
+        ...(parent.subsections ?? []),
+        {
+          id: section.id,
+          name: section.name,
+          start_ch: section.start_ch ?? null,
+          end_ch: section.end_ch ?? null,
+          direction: section.direction ?? null,
+          qr_token: section.qr_token ?? null,
+          app_config: section.app_config ?? {},
+          location_id: section.location_id ?? null,
+          source_kind: "section",
+        },
+      ];
+      promoted.add(section.id);
+    }
+    const output = cloned.filter((section) => !promoted.has(section.id));
+    return output.map((section) => ({
+      ...section,
+      subsections: [...(section.subsections ?? [])].sort((a, b) =>
+        String(a.name ?? "").localeCompare(String(b.name ?? "")),
+      ),
+    }));
+  }, [unifiedSections]);
+
   const subsectionEditOptions = useMemo(
     () =>
-      unifiedSections.flatMap((sec) =>
-        (sec.subsections ?? []).map((sub) => ({
-          sub,
-          sectionName: sec.name,
-        })),
+      normalizedSections.flatMap((sec) =>
+        (sec.subsections ?? [])
+          .filter((sub) => sub.source_kind !== "section")
+          .map((sub) => ({
+            sub,
+            sectionName: sec.name,
+          })),
       ),
-    [unifiedSections],
+    [normalizedSections],
   );
 
   useEffect(() => {
@@ -541,12 +602,17 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       return;
     }
     setSendQrLoading(true);
+    const subsectionUsesSectionRoute =
+      sendQrTarget.kind === "subsection" &&
+      sendQrTarget.subsection.source_kind === "section";
     const id =
       sendQrTarget.kind === "section"
         ? sendQrTarget.section.id
         : sendQrTarget.subsection.id;
     const base =
-      sendQrTarget.kind === "section" ? "/api/psp/sections" : "/api/psp/subsections";
+      sendQrTarget.kind === "section" || subsectionUsesSectionRoute
+        ? "/api/psp/sections"
+        : "/api/psp/subsections";
     const r1 = await fetch(`${base}/${id}/qr`, {
       method: "POST",
       headers: {
@@ -565,14 +631,20 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       return;
     }
     const r2 =
-      sendQrTarget.kind === "section"
+      sendQrTarget.kind === "section" || subsectionUsesSectionRoute
         ? await fetch("/api/psp/sections/send-qr", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ sectionId: sendQrTarget.section.id, email: trimmed }),
+            body: JSON.stringify({
+              sectionId:
+                sendQrTarget.kind === "section"
+                  ? sendQrTarget.section.id
+                  : sendQrTarget.subsection.id,
+              email: trimmed,
+            }),
           })
         : await fetch("/api/psp/subsections/send-qr", {
             method: "POST",
@@ -695,7 +767,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   };
 
   const openCreateSubsectionFromMenu = () => {
-    if (!unifiedSections.length) {
+    if (!normalizedSections.length) {
       pushToast({
         type: "info",
         title: "No sections",
@@ -703,7 +775,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    setCreateSubSectionId(unifiedSections[0].id);
+    setCreateSubSectionId(normalizedSections[0].id);
     setCreateSubName("");
     setCreateSubStart("");
     setCreateSubEnd("");
@@ -1552,7 +1624,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         </header>
 
         <div className="space-y-4">
-          {unifiedSections.length === 0 ? (
+          {normalizedSections.length === 0 ? (
             <div className="flex justify-end pb-1">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -1574,7 +1646,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                     <DropdownMenuSubContent>
                       <DropdownMenuItem
                         onClick={openCreateSubsectionFromMenu}
-                        disabled={!authEmail || !unifiedSections.length}
+                                disabled={!authEmail || !normalizedSections.length}
                       >
                         Create
                       </DropdownMenuItem>
@@ -1604,7 +1676,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               </DropdownMenu>
             </div>
           ) : null}
-          {unifiedSections.map((section, sectionIndex) => {
+          {normalizedSections.map((section, sectionIndex) => {
             const chainageText = formatSectionChainageText(section);
             const sectionScopeReports = compactionReports.filter(
               (r) =>
@@ -1674,9 +1746,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                             <DropdownMenuSubContent>
                               <DropdownMenuItem
                                 onClick={openCreateSubsectionFromMenu}
-                                disabled={
-                                  !authEmail || !unifiedSections.length
-                                }
+                                disabled={!authEmail || !normalizedSections.length}
                               >
                                 Create
                               </DropdownMenuItem>
@@ -1779,7 +1849,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
             );
           })}
 
-          {authEmail && !unifiedSections.length && !locations.length ? (
+          {authEmail && !normalizedSections.length && !locations.length ? (
             <p className="text-sm text-[var(--muted-foreground)]">
               No sections or sites loaded. Create a site to get started.
             </p>
@@ -1855,7 +1925,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                   <SelectValue placeholder="Select section" />
                 </SelectTrigger>
                 <SelectContent>
-                  {unifiedSections.map((s) => (
+                  {normalizedSections.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
                       {s.name}
                     </SelectItem>
