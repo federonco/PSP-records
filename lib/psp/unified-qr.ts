@@ -6,11 +6,29 @@ export function getEnsureQrSupabase(accessToken: string) {
   return getSupabaseServer({ accessToken });
 }
 
-export function buildEnterQrUrl(token: string): string {
-  const base = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/$/, "");
-  if (!base) {
-    throw new Error("NEXT_PUBLIC_SITE_URL is required for QR URLs");
+/**
+ * Public origin for `/enter?token=…` in QRs and emails (runs on the server in API routes).
+ *
+ * - Prefer `NEXT_PUBLIC_SITE_URL` in production (canonical custom domain, stable across deploys).
+ * - If unset on Vercel, `VERCEL_URL` is the **public** deployment hostname (e.g. `*.vercel.app`),
+ *   not an internal VPC URL — `https://${VERCEL_URL}` is valid for that deployment.
+ */
+export function resolvePublicSiteUrl(): string {
+  const trim = (v: string | undefined) => v?.trim().replace(/\/$/, "") ?? "";
+  const explicit = trim(process.env.NEXT_PUBLIC_SITE_URL);
+  if (explicit) return explicit;
+  const vercel = process.env.VERCEL_URL;
+  if (vercel) {
+    const host = vercel.replace(/^https?:\/\//, "");
+    return `https://${host}`;
   }
+  throw new Error(
+    "Set NEXT_PUBLIC_SITE_URL (canonical URL) or deploy on Vercel (VERCEL_URL) for QR / enter links.",
+  );
+}
+
+export function buildEnterQrUrl(token: string): string {
+  const base = resolvePublicSiteUrl();
   return `${base}/enter?token=${encodeURIComponent(token)}`;
 }
 

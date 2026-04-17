@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminEmail } from "@/lib/admin";
 import { getUserFromRequest } from "@/lib/api-auth";
-import { buildHtmlBody, getSenderAddress, sendEmail } from "@/lib/email";
+import {
+  buildQrEmailHtml,
+  buildQrEmailText,
+  getSenderAddress,
+  sendEmail,
+} from "@/lib/email";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { ensureUnifiedSectionQrToken } from "@/lib/psp/unified-qr";
 import { generateSectionQrPdf } from "@/lib/reporting/section-qr-pdf";
@@ -57,8 +62,8 @@ export async function POST(request: NextRequest) {
       from: getSenderAddress(),
       to: email,
       subject: `QR Code — ${sectionName}`,
-      text: `Please find the QR code for ${sectionName} attached.`,
-      html: buildHtmlBody(`Please find the QR code for ${sectionName} attached.`),
+      text: buildQrEmailText(sectionName, url),
+      html: buildQrEmailHtml(sectionName, url),
       attachments: [
         {
           filename,

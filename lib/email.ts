@@ -55,13 +55,56 @@ export function buildHtmlBody(textBody: string): string {
   return `<div style="font-family: Arial, sans-serif; color: #333;">${escaped}${getReadxSignatureHtml()}</div>`;
 }
 
+function escapeHtmlText(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeHtmlAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;");
+}
+
+/** Plain text + HTML for QR emails: PDF attachment + fallback link (Resend-safe HTML). */
+export function buildQrEmailText(sectionTitle: string, enterUrl: string): string {
+  return `Please find the QR code for ${sectionTitle} attached as a PDF.\n\nIf the attachment does not open, open this link in your browser:\n${enterUrl}`;
+}
+
+export function buildQrEmailHtml(sectionTitle: string, enterUrl: string): string {
+  const title = escapeHtmlText(sectionTitle);
+  const href = escapeHtmlAttr(enterUrl);
+  const urlVisible = escapeHtmlText(enterUrl);
+  return `<div style="font-family: Arial, sans-serif; color: #333;">
+<p>Please find the QR code for <strong>${title}</strong> attached as a PDF.</p>
+<p style="word-break:break-all;"><a href="${href}" style="color:#1a5276;">${urlVisible}</a></p>
+<p style="font-size:12px;color:#666;">You can open this link directly if scanning the PDF fails.</p>
+${getReadxSignatureHtml()}</div>`;
+}
+
+/**
+ * Resend's client JSON.stringifies the request body. Raw Node Buffers become
+ * `{ type: "Buffer", data: [...] }`, which corrupts PDFs. The API expects base64.
+ */
+function attachmentContentForResend(content: Buffer | string): string {
+  if (typeof content === "string") return content;
+  return Buffer.from(content).toString("base64");
+}
+
 export async function sendEmail(options: {
   from: string;
   to: string;
   subject: string;
   text: string;
   html: string;
-  attachments?: { filename: string; content: Buffer; contentType: string }[];
+  attachments?: {
+    filename: string;
+    content: Buffer | string;
+    contentType?: string;
+  }[];
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -74,10 +117,15 @@ export async function sendEmail(options: {
     subject: options.subject,
     text: options.text,
     html: options.html,
-    attachments: options.attachments?.map((a) => ({
-      filename: a.filename,
-      content: a.content,
-    })),
+    attachments: options.attachments?.map((a) => {
+      const isPdfName = a.filename.toLowerCase().endsWith(".pdf");
+      return {
+        filename: a.filename,
+        content: attachmentContentForResend(a.content),
+        contentType:
+          a.contentType ?? (isPdfName ? "application/pdf" : undefined),
+      };
+    }),
   });
   if (error) throw new Error(error.message);
 }

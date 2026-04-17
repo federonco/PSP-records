@@ -5,7 +5,12 @@ export async function generateSectionQrPdf(
   sectionName: string,
   qrUrl: string,
 ): Promise<Buffer> {
-  const qrBuffer = await QRCode.toBuffer(qrUrl, { width: 300, margin: 2 });
+  const qrBuffer = await QRCode.toBuffer(qrUrl, {
+    type: "png",
+    width: 300,
+    margin: 2,
+    errorCorrectionLevel: "M",
+  });
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([420, 595]);
   const { width, height } = page.getSize();
