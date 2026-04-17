@@ -15,11 +15,9 @@ const layerKeys = [
 ] as const;
 
 export async function POST(request: NextRequest) {
-
   const body = await request.json();
   const {
     locationId,
-    locationName,
     chainage,
     siteInspector,
     layers,
@@ -29,11 +27,23 @@ export async function POST(request: NextRequest) {
     compactorSn,
   } = body;
 
-  if (!locationId || !siteInspector || Number.isNaN(Number(chainage))) {
+  const chainageNumber = Number(chainage);
+  if (!siteInspector || Number.isNaN(chainageNumber)) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  const chainageNumber = Number(chainage);
+  const hasLocation = Boolean(locationId && String(locationId).trim());
+  const unified =
+    (unifiedSectionId != null && String(unifiedSectionId).trim()) ||
+    (sectionId != null && String(sectionId).trim()) ||
+    null;
+  if (!hasLocation && !unified) {
+    return NextResponse.json(
+      { error: "Provide locationId or unifiedSectionId" },
+      { status: 400 },
+    );
+  }
+
   if (chainageNumber % CHAINAGE_STEP !== 0) {
     return NextResponse.json(
       { error: "Chainage must be a multiple of 20" },
@@ -54,12 +64,28 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { data: existing, error: findError } = await supabase
+
+  let find = supabase
     .from("psp_records")
     .select("id")
-    .eq("location_id", locationId)
-    .eq("chainage", chainageNumber)
-    .maybeSingle();
+    .eq("chainage", chainageNumber);
+
+  if (hasLocation) {
+    find = find.eq("location_id", String(locationId).trim());
+  } else {
+    find = find.eq("unified_section_id", unified!);
+    const sub =
+      subsectionId != null && String(subsectionId).trim()
+        ? String(subsectionId).trim()
+        : null;
+    if (sub) {
+      find = find.eq("subsection_id", sub);
+    } else {
+      find = find.is("subsection_id", null);
+    }
+  }
+
+  const { data: existing, error: findError } = await find.maybeSingle();
 
   if (findError) {
     return NextResponse.json({ error: findError.message }, { status: 500 });
@@ -74,10 +100,6 @@ export async function POST(request: NextRequest) {
       ? String(compactorSn).trim()
       : null;
 
-  const unified =
-    (unifiedSectionId != null && String(unifiedSectionId).trim()) ||
-    (sectionId != null && String(sectionId).trim()) ||
-    null;
   const sub =
     subsectionId != null && String(subsectionId).trim()
       ? String(subsectionId).trim()

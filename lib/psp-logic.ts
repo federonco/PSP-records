@@ -8,6 +8,7 @@ type ResolveLocationInput = {
 };
 
 export type CleanRecordInput = {
+  /** Legacy PSP site id; optional when saving by unified section only (QR flow). */
   locationId: string;
   locationName?: string | null;
   chainage: number;
@@ -16,6 +17,8 @@ export type CleanRecordInput = {
   /** Unified `sections.id` (replaces legacy psp_sections.section_id). */
   unifiedSectionId?: string | null;
   subsectionId?: string | null;
+  /** Legacy FK to psp_sections; omit for new unified records. */
+  legacySectionId?: string | null;
   compactorSn?: string | null;
 };
 
@@ -63,13 +66,11 @@ export function validateSaveData(input: Record<string, unknown>) {
     layers: {},
     unifiedSectionId: null,
     subsectionId: null,
+    legacySectionId: null,
   };
 
   const locationId = String(input.locationId ?? "").trim();
   const locationName = String(input.locationName ?? "").trim();
-  if (!locationId && !locationName) {
-    errors.push("Location is required");
-  }
   clean.locationId = locationId;
   clean.locationName = locationName || null;
 
@@ -105,9 +106,11 @@ export function validateSaveData(input: Record<string, unknown>) {
   clean.unifiedSectionId = unified;
   clean.subsectionId =
     String(input.subsectionId ?? "").trim() || null;
+  clean.legacySectionId =
+    String(input.section_id ?? input.legacySectionId ?? "").trim() || null;
 
   if (!clean.unifiedSectionId) {
-    errors.push("Section is required");
+    errors.push("unifiedSectionId is required");
   }
 
   const compactorRaw = input.compactorSn;

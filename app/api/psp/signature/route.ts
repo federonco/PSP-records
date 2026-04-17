@@ -9,9 +9,16 @@ type SignaturePayload = {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { locationId, chainage, inspectorName, signatureStrokes } = body;
+  const {
+    locationId,
+    unifiedSectionId,
+    subsectionId,
+    chainage,
+    inspectorName,
+    signatureStrokes,
+  } = body;
 
-  if (!locationId || Number.isNaN(Number(chainage)) || !inspectorName) {
+  if (Number.isNaN(Number(chainage)) || !inspectorName) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
@@ -25,13 +32,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid signature payload" }, { status: 400 });
   }
 
+  const hasLocation = Boolean(locationId && String(locationId).trim());
+  const hasUnified = Boolean(
+    unifiedSectionId && String(unifiedSectionId).trim(),
+  );
+  if (!hasLocation && !hasUnified) {
+    return NextResponse.json(
+      { error: "Provide locationId or unifiedSectionId" },
+      { status: 400 },
+    );
+  }
+
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { data: record, error } = await supabase
+
+  let q = supabase
     .from("psp_records")
     .select("id")
-    .eq("location_id", locationId)
-    .eq("chainage", Number(chainage))
-    .maybeSingle();
+    .eq("chainage", Number(chainage));
+
+  if (hasLocation) {
+    q = q.eq("location_id", String(locationId).trim());
+  } else {
+    q = q.eq("unified_section_id", String(unifiedSectionId).trim());
+    const sub = subsectionId != null && String(subsectionId).trim();
+    if (sub) {
+      q = q.eq("subsection_id", sub);
+    } else {
+      q = q.is("subsection_id", null);
+    }
+  }
+
+  const { data: record, error } = await q.maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

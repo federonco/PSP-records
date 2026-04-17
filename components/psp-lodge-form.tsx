@@ -92,12 +92,17 @@ import { Loader2 } from "lucide-react";
 const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
 
 export type PspLodgeLockedEntry = {
-  locationId: string;
-  locationName: string;
+  /** Legacy PSP site row; optional when entering via unified QR only. */
+  locationId?: string | null;
+  locationName?: string | null;
   unifiedSectionId: string;
   subsectionId: string | null;
   sectionName: string;
   subsectionName: string | null;
+  /** From GET /api/psp/enter (section/subsection row) when no location is used. */
+  chainageStart?: number | null;
+  chainageEnd?: number | null;
+  chainageDirection?: string | null;
 };
 
 type PspLodgeFormProps = {
@@ -167,10 +172,13 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
 
   const locationId = useMemo(
     () =>
+      (lockedEntry?.locationId != null && String(lockedEntry.locationId).trim()
+        ? String(lockedEntry.locationId).trim()
+        : null) ??
       selectedSubsection?.location_id ??
       selectedSection?.location_id ??
       null,
-    [selectedSubsection, selectedSection],
+    [lockedEntry, selectedSubsection, selectedSection],
   );
 
   const subsectionIdForApi = selectedSubsectionId;
@@ -236,6 +244,18 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [lockedEntry, sections]);
 
   useEffect(() => {
+    if (!lockedEntry) return;
+    const start = lockedEntry.chainageStart;
+    if (
+      start != null &&
+      Number.isFinite(start) &&
+      !locationId
+    ) {
+      setChainage(start);
+    }
+  }, [lockedEntry, locationId]);
+
+  useEffect(() => {
     if (lockedEntry || !sections.length) return;
     setSelectedSectionId((prev) =>
       prev && sections.some((s) => s.id === prev) ? prev : sections[0].id,
@@ -291,7 +311,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [locationId]);
 
   useEffect(() => {
-    if (!locationId || !unifiedSectionId) {
+    if (!unifiedSectionId) {
       setChainageLoading(false);
       return;
     }
@@ -299,12 +319,15 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     const updateSuggestion = async () => {
       try {
         const token = await getAccessToken();
-        const usp = new URLSearchParams({
-          locationId,
-          unifiedSectionId,
-        });
+        const usp = new URLSearchParams({ unifiedSectionId });
         if (subsectionIdForApi) {
           usp.set("subsectionId", subsectionIdForApi);
+        }
+        if (locationId?.trim()) {
+          usp.set("locationId", locationId.trim());
+          if (locationName?.trim()) {
+            usp.set("location", locationName.trim());
+          }
         }
         const response = await fetch(`/api/psp/next-chainage?${usp.toString()}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -326,6 +349,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     updateSuggestion();
   }, [
     locationId,
+    locationName,
     unifiedSectionId,
     subsectionIdForApi,
     pushToast,
@@ -333,13 +357,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   ]);
 
   useEffect(() => {
-    if (!locationId || !chainage || !unifiedSectionId) return;
+    if (!unifiedSectionId || !chainage) return;
      const checkDuplicate = async () => {
       setChecking(true);
       try {
         const token = await getAccessToken();
         const usp = new URLSearchParams({
-          locationId,
           chainage: String(chainage),
           unifiedSectionId,
         });
@@ -368,7 +391,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      checkDuplicate();
   }, [
     chainage,
-    locationId,
     unifiedSectionId,
     subsectionIdForApi,
     pushToast,
@@ -391,7 +413,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
    const canSubmit =
-     locationId &&
      unifiedSectionId &&
      chainage > 0 &&
      siteInspector &&
@@ -429,8 +450,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          ...(token ? { Authorization: `Bearer ${token}` } : {}),
        },
        body: JSON.stringify({
-         locationId,
-         locationName,
+         ...(locationId?.trim()
+           ? { locationId: locationId.trim() }
+           : {}),
+         ...(locationName?.trim()
+           ? { locationName: locationName.trim() }
+           : {}),
          unifiedSectionId,
          subsectionId: subsectionIdForApi,
          chainage,
@@ -462,7 +487,14 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          locationId,
+          ...(locationId?.trim()
+            ? { locationId: locationId.trim() }
+            : {
+                unifiedSectionId,
+                ...(subsectionIdForApi
+                  ? { subsectionId: subsectionIdForApi }
+                  : {}),
+              }),
           chainage,
           inspectorName: siteInspector,
           signatureStrokes,
@@ -491,12 +523,15 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      setDuplicate(false);
      setRecordId(null);
     const nextToken = await getAccessToken();
-    const usp = new URLSearchParams({
-      locationId,
-      unifiedSectionId,
-    });
+    const usp = new URLSearchParams({ unifiedSectionId });
     if (subsectionIdForApi) {
       usp.set("subsectionId", subsectionIdForApi);
+    }
+    if (locationId?.trim()) {
+      usp.set("locationId", locationId.trim());
+      if (locationName?.trim()) {
+        usp.set("location", locationName.trim());
+      }
     }
     const nextResponse = await fetch(`/api/psp/next-chainage?${usp.toString()}`, {
       headers: nextToken ? { Authorization: `Bearer ${nextToken}` } : undefined,
@@ -518,8 +553,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          ...(token ? { Authorization: `Bearer ${token}` } : {}),
        },
        body: JSON.stringify({
-         locationId,
-         locationName,
+         ...(locationId?.trim()
+           ? { locationId: locationId.trim() }
+           : {}),
+         ...(locationName?.trim()
+           ? { locationName: locationName.trim() }
+           : {}),
          unifiedSectionId,
          subsectionId: subsectionIdForApi,
          chainage,
@@ -566,7 +605,14 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          ...(token ? { Authorization: `Bearer ${token}` } : {}),
        },
        body: JSON.stringify({
-         locationId,
+         ...(locationId?.trim()
+           ? { locationId: locationId.trim() }
+           : {
+               unifiedSectionId,
+               ...(subsectionIdForApi
+                 ? { subsectionId: subsectionIdForApi }
+                 : {}),
+             }),
          chainage,
          inspectorName: siteInspector,
          signatureStrokes: payload,

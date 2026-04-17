@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { resolvePublicSiteUrl } from "@/lib/psp/unified-qr";
 
 /** Sender: use SMTP_FROM (set in Vercel). Fallback for local dev. */
 export function getSenderAddress(): string {
@@ -8,16 +9,10 @@ export function getSenderAddress(): string {
   );
 }
 
-/** Base URL for public assets (emails need absolute URLs) */
+/** Absolute `https://` URL for `/public` files (email clients require public HTTPS URLs). */
 function getPublicAssetUrl(path: string): string {
-  const base = process.env.NEXT_PUBLIC_SITE_URL;
-  if (base) {
-    return `${base.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
-  }
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}/${path.replace(/^\//, "")}`;
-  }
-  return `https://apa-dashboard.readx.com.au/${path.replace(/^\//, "")}`;
+  const base = resolvePublicSiteUrl();
+  return `${base}/${path.replace(/^\//, "")}`;
 }
 
 /** readX HTML email signature — second line: Drainer - OnSite-B */

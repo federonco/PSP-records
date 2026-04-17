@@ -16,6 +16,43 @@ type EnterState =
 const INVALID_MSG =
   "QR code not recognised. Please scan again or contact your supervisor.";
 
+function mapEnterPayload(payload: Record<string, unknown>): PspLodgeLockedEntry {
+  const typ = payload.type;
+  const num = (v: unknown) =>
+    v != null && v !== "" && Number.isFinite(Number(v)) ? Number(v) : null;
+
+  if (typ === "section") {
+    return {
+      unifiedSectionId: String(payload.id ?? ""),
+      subsectionId: null,
+      sectionName: String(payload.name ?? ""),
+      subsectionName: null,
+      chainageStart: num(payload.start_ch),
+      chainageEnd: num(payload.end_ch),
+      chainageDirection:
+        typeof payload.direction === "string" ? payload.direction : null,
+    };
+  }
+
+  const parent = payload.sections as
+    | { id: string; name: string }
+    | { id: string; name: string }[]
+    | null
+    | undefined;
+  const parentRow = Array.isArray(parent) ? parent[0] : parent;
+
+  return {
+    unifiedSectionId: String(parentRow?.id ?? payload.section_id ?? ""),
+    subsectionId: String(payload.id ?? ""),
+    sectionName: String(parentRow?.name ?? ""),
+    subsectionName: String(payload.name ?? ""),
+    chainageStart: num(payload.start_ch),
+    chainageEnd: num(payload.end_ch),
+    chainageDirection:
+      typeof payload.direction === "string" ? payload.direction : null,
+  };
+}
+
 function EnterContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -32,23 +69,28 @@ function EnterContent() {
         const res = await fetch(
           `/api/psp/enter?token=${encodeURIComponent(token)}`,
         );
-        const payload = await res.json().catch(() => ({}));
+        const payload = (await res.json().catch(() => ({}))) as Record<
+          string,
+          unknown
+        >;
         if (cancelled) return;
         if (!res.ok) {
+          if (res.status !== 404) {
+            console.error("[enter] lookup failed", {
+              status: res.status,
+              tokenPrefix: `${token.slice(0, 8)}…`,
+              body: payload,
+            });
+          }
           setState({ status: "error", message: INVALID_MSG });
           return;
         }
-        setState({
-          status: "ok",
-          locked: {
-            locationId: payload.locationId,
-            locationName: payload.locationName ?? "",
-            unifiedSectionId: payload.unifiedSectionId,
-            subsectionId: payload.subsectionId ?? null,
-            sectionName: payload.sectionName ?? "",
-            subsectionName: payload.subsectionName ?? null,
-          },
-        });
+        if (payload.type !== "section" && payload.type !== "subsection") {
+          console.error("[enter] unexpected payload", payload);
+          setState({ status: "error", message: INVALID_MSG });
+          return;
+        }
+        setState({ status: "ok", locked: mapEnterPayload(payload) });
       } catch {
         if (!cancelled) setState({ status: "error", message: INVALID_MSG });
       }
