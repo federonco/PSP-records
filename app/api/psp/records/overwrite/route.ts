@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       subsection_id: sub,
       site_inspector: siteInspector,
       compactor_sn: compactorSnValue || null,
+      modified_at: new Date().toISOString(),
       ...layerPayload,
     })
     .eq("id", existing.id);

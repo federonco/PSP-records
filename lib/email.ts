@@ -1,5 +1,8 @@
 import { Resend } from "resend";
-import { resolvePublicSiteUrl } from "@/lib/psp/unified-qr";
+import fs from "fs";
+import path from "path";
+
+const LOGO_CID = "readx-logo@onsite";
 
 /** Sender: use SMTP_FROM (set in Vercel). Fallback for local dev. */
 export function getSenderAddress(): string {
@@ -9,15 +12,8 @@ export function getSenderAddress(): string {
   );
 }
 
-/** Absolute `https://` URL for `/public` files (email clients require public HTTPS URLs). */
-function getPublicAssetUrl(path: string): string {
-  const base = resolvePublicSiteUrl();
-  return `${base}/${path.replace(/^\//, "")}`;
-}
-
 /** readX HTML email signature — second line: Drainer - OnSite-B */
 export function getReadxSignatureHtml(): string {
-  const logoUrl = getPublicAssetUrl("readx-logo.png");
   return `
 <div style="font-family: Arial, sans-serif; color: #333; padding: 24px;">
   <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 32px 0;" />
@@ -25,7 +21,7 @@ export function getReadxSignatureHtml(): string {
     <tr>
       <td style="padding-right: 16px; vertical-align: middle;">
         <a href="https://www.readx.com.au" target="_blank">
-          <img src="${logoUrl}" alt="readX" width="80" />
+          <img src="cid:${LOGO_CID}" alt="readX" width="80" />
         </a>
       </td>
       <td style="vertical-align: middle; border-left: 2px solid #1a5276; padding-left: 16px;">
@@ -99,6 +95,7 @@ export async function sendEmail(options: {
     filename: string;
     content: Buffer | string;
     contentType?: string;
+    cid?: string;
   }[];
 }): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -106,20 +103,30 @@ export async function sendEmail(options: {
     throw new Error("RESEND_API_KEY is required");
   }
   const resend = new Resend(apiKey);
+  const logoPath = path.join(process.cwd(), "public", "readx-logo.png");
+  const logoAttachment = fs.existsSync(logoPath)
+    ? {
+        filename: "readx-logo.png",
+        content: fs.readFileSync(logoPath),
+        contentType: "image/png",
+        cid: LOGO_CID,
+      }
+    : null;
   const { error } = await resend.emails.send({
     from: options.from,
     to: options.to,
     subject: options.subject,
     text: options.text,
     html: options.html,
-    attachments: options.attachments?.map((a) => {
+    attachments: [...(options.attachments ?? []), ...(logoAttachment ? [logoAttachment] : [])].map((a) => {
       const isPdfName = a.filename.toLowerCase().endsWith(".pdf");
       return {
         filename: a.filename,
         content: attachmentContentForResend(a.content),
         contentType:
           a.contentType ?? (isPdfName ? "application/pdf" : undefined),
-      };
+        contentId: a.cid,
+      } as unknown as Record<string, unknown>;
     }),
   });
   if (error) throw new Error(error.message);

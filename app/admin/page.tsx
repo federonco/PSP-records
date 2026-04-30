@@ -281,6 +281,16 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   const [sitePickerOpen, setSitePickerOpen] = useState(false);
   const [penetrometerLocationId, setPenetrometerLocationId] = useState("");
   const [auditOpen, setAuditOpen] = useState(false);
+  const [reportEmail, setReportEmail] = useState("");
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [itrModalOpen, setItrModalOpen] = useState(false);
+  const [sendingAudit, setSendingAudit] = useState(false);
+  const [sendingAllItr, setSendingAllItr] = useState(false);
+  const [reportScope, setReportScope] = useState<{
+    sectionId: string;
+    subsectionId: string | null;
+    sectionName: string;
+  } | null>(null);
   /** Section / subsection compaction panels: default collapsed */
   const [compactionPanelExpanded, setCompactionPanelExpanded] = useState<
     Record<string, boolean>
@@ -432,7 +442,18 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    setCompactionReports((data ?? []) as CompactionReportRow[]);
+    const reports = (data ?? []) as CompactionReportRow[];
+    const dedupedReports = reports.filter(
+      (report, index, self) =>
+        index ===
+        self.findIndex(
+          (r) =>
+            r.block_key === report.block_key &&
+            r.unified_section_id === report.unified_section_id &&
+            (r.subsection_id ?? null) === (report.subsection_id ?? null),
+        ),
+    );
+    setCompactionReports(dedupedReports);
   };
 
   useEffect(() => {
@@ -471,10 +492,13 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     void loadCompactionReports();
   }, [authEmail, locationIdsKey]);
 
-  const syncCompactionReports = async (
-    locationId: string,
-    locationName: string,
-  ) => {
+  const syncCompactionReports = async (args: {
+    locationId: string;
+    locationName: string;
+    sectionId?: string | null;
+    subsectionId?: string | null;
+  }) => {
+    const { locationId, locationName, sectionId, subsectionId } = args;
     if (!locationId || !authEmail) return;
     setSyncingLocationId(locationId);
     const token = await getAccessToken();
@@ -496,6 +520,8 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       body: JSON.stringify({
         locationId,
         locationName,
+        sectionId: sectionId ?? null,
+        subsectionId: subsectionId ?? null,
       }),
     });
     const payload = await response.json();
@@ -1107,6 +1133,107 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
      window.open(payload.url, "_blank");
    };
 
+  const openAuditModal = (sectionId: string, sectionName: string, subsectionId?: string) => {
+    setReportScope({
+      sectionId,
+      subsectionId: subsectionId ?? null,
+      sectionName,
+    });
+    setReportEmail(authEmail ?? "");
+    setAuditModalOpen(true);
+  };
+
+  const openItrModal = (sectionId: string, sectionName: string, subsectionId?: string) => {
+    setReportScope({
+      sectionId,
+      subsectionId: subsectionId ?? null,
+      sectionName,
+    });
+    setReportEmail(authEmail ?? "");
+    setItrModalOpen(true);
+  };
+
+  const handleSendAuditByScope = async () => {
+    if (!reportScope) return;
+    const token = await getAccessToken();
+    if (!token) {
+      pushToast({ type: "error", title: "Sign in required" });
+      return;
+    }
+    setSendingAudit(true);
+    try {
+      const params = new URLSearchParams({
+        unified_section_id: reportScope.sectionId,
+        recipient_email: reportEmail.trim(),
+      });
+      if (reportScope.subsectionId) {
+        params.set("subsection_id", reportScope.subsectionId);
+      }
+      const response = await fetch(`/api/psp/audit-report/email?${params.toString()}`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to send audit");
+      pushToast({
+        type: "success",
+        title: "Audit report sent",
+        message: `Report sent to ${reportEmail.trim()}`,
+      });
+      setAuditModalOpen(false);
+      setReportScope(null);
+    } catch (error) {
+      pushToast({
+        type: "error",
+        title: "Send failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setSendingAudit(false);
+    }
+  };
+
+  const handleSendAllItr = async () => {
+    if (!reportScope) return;
+    const token = await getAccessToken();
+    if (!token) {
+      pushToast({ type: "error", title: "Sign in required" });
+      return;
+    }
+    setSendingAllItr(true);
+    try {
+      const response = await fetch("/api/psp/compaction-reports/email-all", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          unified_section_id: reportScope.sectionId,
+          subsection_id: reportScope.subsectionId,
+          recipient_email: reportEmail.trim(),
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Unable to send reports");
+      pushToast({
+        type: "success",
+        title: "All ITR sent",
+        message: `Report sent to ${reportEmail.trim()}`,
+      });
+      setItrModalOpen(false);
+      setReportScope(null);
+    } catch (error) {
+      pushToast({
+        type: "error",
+        title: "Send failed",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    } finally {
+      setSendingAllItr(false);
+    }
+  };
+
   const openLocationModal = (mode: "create" | "edit", targetId?: string) => {
     setLocationModalMode(mode);
     setSelectedLocationEditId(targetId ?? null);
@@ -1311,11 +1438,41 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   const resolveSectionScopeSync = (
     section: UnifiedSectionRow,
     scopeReports: CompactionReportRow[],
-  ): { id: string; name: string } | null => {
+  ): {
+    id: string;
+    name: string;
+    sectionId: string;
+    subsectionId: null;
+  } | null => {
+    const sectionLocationId =
+      (typeof section.location_id === "string" && section.location_id.trim()
+        ? section.location_id.trim()
+        : null) ??
+      (section.app_config &&
+      typeof section.app_config === "object" &&
+      !Array.isArray(section.app_config) &&
+      typeof (section.app_config as Record<string, unknown>).location_id === "string" &&
+      String((section.app_config as Record<string, unknown>).location_id).trim()
+        ? String((section.app_config as Record<string, unknown>).location_id).trim()
+        : null);
+    if (sectionLocationId) {
+      const loc = locations.find((l) => l.id === sectionLocationId);
+      return {
+        id: sectionLocationId,
+        name: loc?.name ?? sectionLocationId,
+        sectionId: section.id,
+        subsectionId: null,
+      };
+    }
     const first = scopeReports[0];
     if (first?.location_id) {
       const loc = locations.find((l) => l.id === first.location_id);
-      return { id: first.location_id, name: loc?.name ?? first.location_id };
+      return {
+        id: first.location_id,
+        name: loc?.name ?? first.location_id,
+        sectionId: section.id,
+        subsectionId: null,
+      };
     }
     for (const lid of Object.keys(recordsByLocation)) {
       const rows = recordsByLocation[lid] ?? [];
@@ -1326,7 +1483,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         )
       ) {
         const loc = locations.find((l) => l.id === lid);
-        return { id: lid, name: loc?.name ?? lid };
+        return {
+          id: lid,
+          name: loc?.name ?? lid,
+          sectionId: section.id,
+          subsectionId: null,
+        };
       }
     }
     for (const loc of locations) {
@@ -1334,26 +1496,78 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         const uid = (raw as Record<string, unknown>).unified_section_id;
         if (typeof uid === "string" && uid.trim() === section.id) {
-          return { id: loc.id, name: loc.name };
+          return {
+            id: loc.id,
+            name: loc.name,
+            sectionId: section.id,
+            subsectionId: null,
+          };
         }
       }
+    }
+    const firstLocation = locations[0];
+    if (firstLocation) {
+      return {
+        id: firstLocation.id,
+        name: firstLocation.name,
+        sectionId: section.id,
+        subsectionId: null,
+      };
     }
     return null;
   };
 
   const resolveSubsectionScopeSync = (
     sub: UnifiedSubsectionRow,
+    sectionId: string,
     scopeReports: CompactionReportRow[],
-  ): { id: string; name: string } | null => {
+  ): {
+    id: string;
+    name: string;
+    sectionId: string;
+    subsectionId: string;
+  } | null => {
     const fromCfg = locationIdFromSubAppConfig(sub.app_config);
     if (fromCfg) {
       const loc = locations.find((l) => l.id === fromCfg);
-      return { id: fromCfg, name: loc?.name ?? fromCfg };
+      return {
+        id: fromCfg,
+        name: loc?.name ?? fromCfg,
+        sectionId,
+        subsectionId: sub.id,
+      };
     }
     const first = scopeReports[0];
     if (first?.location_id) {
       const loc = locations.find((l) => l.id === first.location_id);
-      return { id: first.location_id, name: loc?.name ?? first.location_id };
+      return {
+        id: first.location_id,
+        name: loc?.name ?? first.location_id,
+        sectionId,
+        subsectionId: sub.id,
+      };
+    }
+    // Fallback: infer location from loaded records for this subsection.
+    for (const lid of Object.keys(recordsByLocation)) {
+      const rows = recordsByLocation[lid] ?? [];
+      if (rows.some((r) => r.subsection_id === sub.id)) {
+        const loc = locations.find((l) => l.id === lid);
+        return {
+          id: lid,
+          name: loc?.name ?? lid,
+          sectionId,
+          subsectionId: sub.id,
+        };
+      }
+    }
+    const firstLocation = locations[0];
+    if (firstLocation) {
+      return {
+        id: firstLocation.id,
+        name: firstLocation.name,
+        sectionId,
+        subsectionId: sub.id,
+      };
     }
     return null;
   };
@@ -1364,7 +1578,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     variant: "section" | "subsection";
     reports: CompactionReportRow[];
     locRecords: RecordRow[];
-    syncTarget: { id: string; name: string } | null;
+    syncTarget: {
+      id: string;
+      name: string;
+      sectionId: string;
+      subsectionId: string | null;
+    } | null;
   }) => {
     const {
       scopeKey,
@@ -1459,7 +1678,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
             className="h-9 w-9 shrink-0 rounded-full border-[#E6EDF3] bg-[#E6EDF3] text-[var(--ink)] hover:bg-[#D3DAE1] hover:border-[#D3DAE1]"
             onClick={() =>
               syncTarget &&
-              syncCompactionReports(syncTarget.id, syncTarget.name)
+              syncCompactionReports({
+                locationId: syncTarget.id,
+                locationName: syncTarget.name,
+                sectionId: syncTarget.sectionId,
+                subsectionId: syncTarget.subsectionId,
+              })
             }
             disabled={
               !authEmail || !syncTarget || syncing
@@ -1480,6 +1704,49 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
         {siteExpanded ? (
           <div className="mt-4 border-t border-[var(--border)] pt-4">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[44px] px-4 text-sm"
+                onClick={() => {
+                  const params = new URLSearchParams();
+                  if (syncTarget?.subsectionId) {
+                    params.set("subsection", syncTarget.subsectionId);
+                  }
+                  router.push(
+                    `/admin/records/${syncTarget?.sectionId ?? ""}${params.toString() ? `?${params.toString()}` : ""}`,
+                  );
+                }}
+                disabled={!syncTarget}
+              >
+                View Records
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[44px] px-4 text-sm border-0 drainer-button-accent"
+                onClick={() =>
+                  syncTarget &&
+                  openAuditModal(syncTarget.sectionId, titleText, syncTarget.subsectionId ?? undefined)
+                }
+                disabled={!syncTarget}
+              >
+                Send Audit
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="min-h-[44px] px-4 text-sm border-0 drainer-button-accent"
+                onClick={() =>
+                  syncTarget &&
+                  openItrModal(syncTarget.sectionId, titleText, syncTarget.subsectionId ?? undefined)
+                }
+                disabled={!syncTarget}
+              >
+                Send All ITR
+              </Button>
+            </div>
             <div className="mb-3 rounded-[var(--radius)] border border-[var(--border)]/70 bg-[var(--surface)] p-3 text-[var(--ink)] shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold">{titleText}</p>
@@ -1801,6 +2068,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                     );
                     const subSyncTarget = resolveSubsectionScopeSync(
                       sub,
+                      section.id,
                       subScopeReports,
                     );
                     return (
@@ -2418,6 +2686,70 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               </Button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={auditModalOpen} onOpenChange={setAuditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send report to</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              Audit report: This report contains all the raw data for the selected section.
+            </p>
+            <Input
+              type="email"
+              placeholder="Email address"
+              value={reportEmail}
+              onChange={(e) => setReportEmail(e.target.value)}
+              className="psp-input"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAuditModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendAuditByScope}
+              disabled={!isValidEmail(reportEmail) || sendingAudit}
+              className="bg-[#B8682A] text-white border-0 hover:bg-[#A35D26]"
+            >
+              {sendingAudit ? "Sending…" : "Send"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={itrModalOpen} onOpenChange={setItrModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send report to</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--muted-foreground)]">
+              All ITRs report: This sends all ITR PDFs for the selected section.
+            </p>
+            <Input
+              type="email"
+              placeholder="Email address"
+              value={reportEmail}
+              onChange={(e) => setReportEmail(e.target.value)}
+              className="psp-input"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setItrModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendAllItr}
+              disabled={!isValidEmail(reportEmail) || sendingAllItr}
+              className="bg-[#B8682A] text-white border-0 hover:bg-[#A35D26]"
+            >
+              {sendingAllItr ? "Sending…" : "Send"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

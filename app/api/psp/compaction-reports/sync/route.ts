@@ -85,6 +85,8 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const locationId = body?.locationId as string | undefined;
   const locationName = body?.locationName as string | undefined;
+  const sectionId = body?.sectionId as string | undefined;
+  const subsectionId = body?.subsectionId as string | undefined;
 
   if (!locationId) {
     return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
@@ -104,54 +106,102 @@ export async function POST(request: NextRequest) {
   const resolvedLocationName =
     locationName ?? locationRow?.name ?? locationId;
 
-  const { data: allSubsections } = await supabase
-    .from("subsections")
-    .select("id,section_id,app_config")
-    .eq("app_id", ONSITE_B_APP);
-
-  const subsectionMatch = (allSubsections ?? []).find((ss) => {
-    const cfg = ss.app_config as Record<string, unknown> | null | undefined;
-    const lid = cfg?.location_id;
-    return typeof lid === "string" && lid === locationId;
-  });
-
   let unified_section_id: string | null = null;
   let subsection_id: string | null = null;
 
-  if (subsectionMatch) {
-    unified_section_id = subsectionMatch.section_id as string;
-    subsection_id = subsectionMatch.id as string;
-  } else {
-    const { data: sampleRec } = await supabase
-      .from("psp_records")
-      .select("unified_section_id")
-      .eq("location_id", locationId)
-      .not("unified_section_id", "is", null)
-      .limit(1)
+  if (subsectionId) {
+    const { data: subsectionRow, error: subsectionError } = await supabase
+      .from("subsections")
+      .select("id,section_id,app_config")
+      .eq("id", subsectionId)
+      .eq("app_id", ONSITE_B_APP)
       .maybeSingle();
 
-    if (sampleRec?.unified_section_id) {
-      unified_section_id = sampleRec.unified_section_id as string;
+    if (subsectionError) {
+      return NextResponse.json({ error: subsectionError.message }, { status: 500 });
+    }
+
+    if (!subsectionRow?.id) {
+      return NextResponse.json(
+        { error: "Invalid subsectionId for compaction sync scope" },
+        { status: 400 },
+      );
+    }
+
+    if (sectionId && subsectionRow.section_id !== sectionId) {
+      return NextResponse.json(
+        { error: "subsectionId does not belong to sectionId" },
+        { status: 400 },
+      );
+    }
+
+    const cfg = subsectionRow.app_config as Record<string, unknown> | null | undefined;
+    const cfgLocationId = cfg?.location_id;
+    if (typeof cfgLocationId === "string" && cfgLocationId !== locationId) {
+      console.warn("compaction sync location mismatch", {
+        locationId,
+        cfgLocationId,
+        subsectionId,
+      });
+    }
+
+    unified_section_id = subsectionRow.section_id as string;
+    subsection_id = subsectionRow.id as string;
+  } else {
+    if (sectionId) {
+      unified_section_id = sectionId;
     } else {
-      const { data: sharedSec } = await supabase
-        .from("sections")
-        .select("id")
-        .eq("scope", "shared")
-        .order("name")
+      const { data: sampleRec } = await supabase
+        .from("psp_records")
+        .select("unified_section_id")
+        .eq("location_id", locationId)
+        .not("unified_section_id", "is", null)
         .limit(1)
         .maybeSingle();
-      unified_section_id = (sharedSec?.id as string) ?? null;
+
+      if (sampleRec?.unified_section_id) {
+        unified_section_id = sampleRec.unified_section_id as string;
+      } else {
+        const { data: sharedSec } = await supabase
+          .from("sections")
+          .select("id")
+          .eq("scope", "shared")
+          .order("name")
+          .limit(1)
+          .maybeSingle();
+        unified_section_id = (sharedSec?.id as string) ?? null;
+      }
     }
     subsection_id = null;
   }
 
-  const { data: records, error } = await supabase
+  console.info("compaction sync payload", {
+    locationId,
+    sectionId: sectionId ?? null,
+    subsectionId: subsectionId ?? null,
+    resolvedSectionId: unified_section_id,
+    resolvedSubsectionId: subsection_id,
+    report_type: "compaction",
+  });
+
+  let recordsQuery = supabase
     .from("psp_records")
     .select(
       "recorded_at,chainage,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,site_inspector",
     )
-    .eq("location_id", locationId)
-    .order("chainage", { ascending: false });
+    .eq("location_id", locationId);
+
+  if (subsectionId) {
+    recordsQuery = recordsQuery.eq("subsection_id", subsectionId);
+  } else if (sectionId) {
+    recordsQuery = recordsQuery
+      .eq("unified_section_id", sectionId)
+      .is("subsection_id", null);
+  }
+
+  const { data: records, error } = await recordsQuery.order("chainage", {
+    ascending: false,
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -162,19 +212,14 @@ export async function POST(request: NextRequest) {
 
   const { data: existingReports } = await supabase
     .from("psp_reports")
-    .select("id,block_key,pdf_path,block_index")
-    .eq("location_id", locationId)
-    .eq("report_type", "compaction");
+    .select("id,block_key,pdf_path,block_index,unified_section_id,subsection_id")
+    .eq("report_type", "compaction")
+    .eq("unified_section_id", unified_section_id)
+    .eq("subsection_id", subsection_id);
 
   const reportMap = new Map(
     (existingReports ?? []).map((row) => [row.block_key, row as ReportRow]),
   );
-  const reportIndexMap = new Map<number, ReportRow>();
-  (existingReports ?? []).forEach((row: ReportRow & { block_index?: number }) => {
-    if (typeof row.block_index === "number") {
-      reportIndexMap.set(row.block_index, row as ReportRow);
-    }
-  });
 
   const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Australia/Perth",
@@ -194,11 +239,10 @@ export async function POST(request: NextRequest) {
   );
 
   for (const block of blocks) {
-    const existing =
-      reportMap.get(block.blockKey) ?? reportIndexMap.get(block.index);
+    const existing = reportMap.get(block.blockKey);
     const basePayload = {
       location_id: locationId,
-      unified_section_id,
+      unified_section_id: sectionId ?? unified_section_id,
       subsection_id,
       report_type: "compaction",
       block_key: block.blockKey,
@@ -213,30 +257,21 @@ export async function POST(request: NextRequest) {
 
     if (block.status === "OPEN") {
       open += 1;
-      if (existing) {
-        const { error: updateError } = await supabase
-          .from("psp_reports")
-          .update({ ...basePayload, pdf_path: null })
-          .eq("id", existing.id);
-        if (updateError) {
-          return NextResponse.json(
-            { error: updateError.message },
-            { status: 500 },
-          );
-        }
-      } else {
-        const { error: insertError } = await supabase
-          .from("psp_reports")
-          .insert({
-          ...basePayload,
-          pdf_path: null,
-          });
-        if (insertError) {
-          return NextResponse.json(
-            { error: insertError.message },
-            { status: 500 },
-          );
-        }
+      const { error: upsertError } = await supabase
+        .from("psp_reports")
+        .upsert(
+          {
+            ...basePayload,
+            pdf_path: null,
+          },
+          {
+            onConflict: "scope_key",
+            ignoreDuplicates: false,
+          },
+        );
+      if (upsertError) {
+        console.error("[sync] upsert error:", upsertError);
+        return NextResponse.json({ error: upsertError.message }, { status: 500 });
       }
       continue;
     }
@@ -291,30 +326,21 @@ export async function POST(request: NextRequest) {
       generated += 1;
     }
 
-    if (existing) {
-      const { error: updateError } = await supabase
-        .from("psp_reports")
-        .update({ ...basePayload, pdf_path: pdfPath })
-        .eq("id", existing.id);
-      if (updateError) {
-        return NextResponse.json(
-          { error: updateError.message },
-          { status: 500 },
-        );
-      }
-    } else {
-      const { error: insertError } = await supabase
-        .from("psp_reports")
-        .insert({
-        ...basePayload,
-        pdf_path: pdfPath,
-        });
-      if (insertError) {
-        return NextResponse.json(
-          { error: insertError.message },
-          { status: 500 },
-        );
-      }
+    const { error: upsertError } = await supabase
+      .from("psp_reports")
+      .upsert(
+        {
+          ...basePayload,
+          pdf_path: pdfPath,
+        },
+        {
+          onConflict: "scope_key",
+          ignoreDuplicates: false,
+        },
+      );
+    if (upsertError) {
+      console.error("[sync] upsert error:", upsertError);
+      return NextResponse.json({ error: upsertError.message }, { status: 500 });
     }
   }
 

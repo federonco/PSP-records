@@ -63,18 +63,36 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { locationId, locationName, blockKey, blockIndex, status, pending } = body;
+  const {
+    locationId,
+    locationName,
+    blockKey,
+    blockIndex,
+    status,
+    pending,
+    unified_section_id,
+    subsection_id,
+    recipient_email,
+  } = body;
 
-  if (!locationId) {
+  if (!locationId && !unified_section_id) {
     return NextResponse.json({ error: "Missing report data" }, { status: 400 });
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { data: records, error } = await supabase
-    .from("psp_records")
-    .select("*")
-    .eq("location_id", locationId)
-    .order("chainage", { ascending: false });
+  let recordsQuery = supabase.from("psp_records").select("*");
+  if (unified_section_id) {
+    recordsQuery = recordsQuery.eq("unified_section_id", unified_section_id);
+    if (subsection_id) {
+      recordsQuery = recordsQuery.eq("subsection_id", subsection_id);
+    } else {
+      recordsQuery = recordsQuery.is("subsection_id", null);
+    }
+  } else if (locationId) {
+    recordsQuery = recordsQuery.eq("location_id", locationId);
+  }
+
+  const { data: records, error } = await recordsQuery.order("chainage", { ascending: false });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -113,6 +131,12 @@ export async function POST(request: NextRequest) {
               </Text>
               <Text style={[styles.cell, styles.headerCell, { width: 58, flexGrow: 0, flexShrink: 0 }]}>
                 Date
+              </Text>
+              <Text style={[styles.cell, styles.headerCell, { width: 58, flexGrow: 0, flexShrink: 0 }]}>
+                Created
+              </Text>
+              <Text style={[styles.cell, styles.headerCell, { width: 58, flexGrow: 0, flexShrink: 0 }]}>
+                Modified
               </Text>
               <Text style={[styles.cell, styles.headerCell, { width: 52, flexGrow: 0, flexShrink: 0 }]}>
                 Time
@@ -164,6 +188,12 @@ export async function POST(request: NextRequest) {
                 </Text>
                 <Text style={[styles.cell, { width: 58, flexGrow: 0, flexShrink: 0 }]}>
                   {formatDateOnly(record.recorded_at)}
+                </Text>
+                <Text style={[styles.cell, { width: 58, flexGrow: 0, flexShrink: 0 }]}>
+                  {formatDateOnly(record.created_at ?? record.recorded_at)}
+                </Text>
+                <Text style={[styles.cell, { width: 58, flexGrow: 0, flexShrink: 0 }]}>
+                  {formatDateOnly(record.modified_at ?? record.recorded_at)}
                 </Text>
                 <Text style={[styles.cell, { width: 52, flexGrow: 0, flexShrink: 0 }]}>
                   {formatTimeOnly(record.recorded_at)}
@@ -241,7 +271,9 @@ export async function POST(request: NextRequest) {
   }
 
   const smtpUser = process.env.SMTP_USER || "resend";
-  const recipients = process.env.ADMIN_EMAIL_ALLOWLIST?.split(",")
+  const recipients = recipient_email
+    ? [String(recipient_email).trim()].filter(Boolean)
+    : process.env.ADMIN_EMAIL_ALLOWLIST?.split(",")
     .map((item) => item.trim())
     .filter(Boolean);
   const to = recipients?.length ? recipients.join(", ") : smtpUser;
@@ -249,7 +281,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing email recipient" }, { status: 400 });
   }
 
-  const safeLocation = (locationName ?? "location").replace(/\s+/g, "-");
+  const safeLocation = (locationName ?? unified_section_id ?? locationId ?? "location").replace(/\s+/g, "-");
   const textBody = `Location: ${locationName ?? locationId}\nRecords: ${
     records?.length ?? 0
   }`;
