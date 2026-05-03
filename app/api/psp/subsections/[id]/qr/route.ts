@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminEmail } from "@/lib/admin";
-import { getUserFromRequest } from "@/lib/api-auth";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   buildEnterQrUrl,
@@ -9,22 +8,11 @@ import {
 
 export const runtime = "nodejs";
 
-async function requireAdmin(request: NextRequest) {
-  const { user, token } = await getUserFromRequest(request);
-  if (!user || !token) {
-    return { ok: false as const, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
-  if (!isAdminEmail(user.email)) {
-    return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-  }
-  return { ok: true as const, user, token };
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdmin(request);
+  const auth = await requireOnSiteBAdmin(request);
   if (!auth.ok) return auth.response;
 
   const { id: subsectionId } = await params;
@@ -61,7 +49,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireAdmin(request);
+  const auth = await requireOnSiteBAdmin(request);
   if (!auth.ok) return auth.response;
 
   const { id: subsectionId } = await params;

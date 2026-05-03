@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import { getUserFromRequest } from "@/lib/api-auth";
-import { isAdminEmail } from "@/lib/admin";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -16,14 +15,9 @@ const styles = StyleSheet.create({
 });
 
 export async function POST(request: NextRequest) {
-  const { user } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
+  const gate = await requireOnSiteBAdmin(request);
+  if (!gate.ok) return gate.response;
+  const { user } = gate;
 
   const body = await request.json();
   const { locationId, locationName, blockKey, blockIndex, status, pending, chainages } = body;

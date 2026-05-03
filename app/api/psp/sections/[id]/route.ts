@@ -1,20 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminEmail } from "@/lib/admin";
-import { getUserFromRequest } from "@/lib/api-auth";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const auth = await requireOnSiteBAdmin(request);
+  if (!auth.ok) return auth.response;
   const { id } = await params;
-  const { user, token } = await getUserFromRequest(request);
-  if (!user || !token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
 
   const body = await request.json();
   const { name } = body;

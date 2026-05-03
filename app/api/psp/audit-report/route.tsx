@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Document, Page, Path, StyleSheet, Svg, Text, View, pdf } from "@react-pdf/renderer";
-import { getUserFromRequest } from "@/lib/api-auth";
 import {
   sendEmail,
   getSenderAddress,
   buildHtmlBody,
 } from "@/lib/email";
-import { isAdminEmail } from "@/lib/admin";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -53,14 +52,8 @@ function buildSignaturePath(
 }
 
 export async function POST(request: NextRequest) {
-  const { user } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
+  const gate = await requireOnSiteBAdmin(request);
+  if (!gate.ok) return gate.response;
 
   const body = await request.json();
   const {
@@ -273,9 +266,9 @@ export async function POST(request: NextRequest) {
   const smtpUser = process.env.SMTP_USER || "resend";
   const recipients = recipient_email
     ? [String(recipient_email).trim()].filter(Boolean)
-    : process.env.ADMIN_EMAIL_ALLOWLIST?.split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+    : process.env.REPORT_DEFAULT_EMAIL?.split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
   const to = recipients?.length ? recipients.join(", ") : smtpUser;
   if (!to) {
     return NextResponse.json({ error: "Missing email recipient" }, { status: 400 });

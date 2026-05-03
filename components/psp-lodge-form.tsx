@@ -1,5 +1,6 @@
  "use client";
 
+ import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
  import { useEffect, useMemo, useState } from "react";
  import { useRouter } from "next/navigation";
  import { AuthPanel } from "@/components/auth-panel";
@@ -16,7 +17,7 @@ import {
   LOCATION_LIST_SELECT,
   mergeLocationAppConfig,
 } from "@/lib/location-app-config";
- import { getSupabaseBrowser } from "@/lib/supabase/browser";
+ import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
  import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
  import { Button } from "@/components/ui/button";
 import {
@@ -148,15 +149,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
 
-  const getAccessToken = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.access_token) {
-      return data.session.access_token;
-    }
-    const refreshed = await supabase.auth.refreshSession();
-    return refreshed.data.session?.access_token ?? null;
-  };
-
   const selectedSection = useMemo(
     () => sections.find((s) => s.id === selectedSectionId) ?? null,
     [sections, selectedSectionId],
@@ -189,11 +181,13 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     activeLocation?.name ?? lockedEntry?.locationName ?? "";
 
    useEffect(() => {
-     supabase.auth.getSession().then(({ data }) => {
+     void supabase.auth.getSession().then(
+       ({ data }: { data: { session: Session | null } }) => {
        setAuthEmail(data.session?.user.email ?? null);
-     });
+     },
+     );
      const { data: subscription } = supabase.auth.onAuthStateChange(
-       (_event, session) => {
+       (_event: AuthChangeEvent, session: Session | null) => {
          setAuthEmail(session?.user.email ?? null);
        },
      );
@@ -211,7 +205,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const token = await getAccessToken();
+      const token = await getBrowserAccessToken();
       const response = await fetch("/api/psp/sections", {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
@@ -293,7 +287,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   useEffect(() => {
     if (!locationId) return;
     const loadOptions = async () => {
-      const token = await getAccessToken();
+      const token = await getBrowserAccessToken();
       const response = await fetch(
         `/api/psp/penetrometer-options?locationId=${locationId}`,
         {
@@ -318,7 +312,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     setChainageLoading(true);
     const updateSuggestion = async () => {
       try {
-        const token = await getAccessToken();
+        const token = await getBrowserAccessToken();
         const usp = new URLSearchParams({ unifiedSectionId });
         if (subsectionIdForApi) {
           usp.set("subsectionId", subsectionIdForApi);
@@ -361,7 +355,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      const checkDuplicate = async () => {
       setChecking(true);
       try {
-        const token = await getAccessToken();
+        const token = await getBrowserAccessToken();
         const usp = new URLSearchParams({
           chainage: String(chainage),
           unifiedSectionId,
@@ -442,7 +436,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const handleLodge = async () => {
      if (!canSubmit || duplicate) return;
      setLoading(true);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
      const response = await fetch("/api/psp/records", {
        method: "POST",
        headers: {
@@ -522,7 +516,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      pushToast({ type: "success", title: "Record lodged" });
      setDuplicate(false);
      setRecordId(null);
-    const nextToken = await getAccessToken();
+    const nextToken = await getBrowserAccessToken();
     const usp = new URLSearchParams({ unifiedSectionId });
     if (subsectionIdForApi) {
       usp.set("subsectionId", subsectionIdForApi);
@@ -545,7 +539,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const handleOverwrite = async () => {
      if (!canSubmit || !duplicate) return;
      setLoading(true);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
      const response = await fetch("/api/psp/records/overwrite", {
        method: "POST",
        headers: {
@@ -597,7 +591,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       });
       return;
     }
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
      const response = await fetch("/api/psp/signature", {
        method: "POST",
        headers: {
@@ -795,7 +789,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                     })()}
                     onValueChange={async (value) => {
                       if (!locationId) return;
-                      const token = await getAccessToken();
+                      const token = await getBrowserAccessToken();
                       const res = await fetch(`/api/psp/locations/${locationId}`, {
                         method: "PATCH",
                         headers: {
@@ -1109,7 +1103,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                   });
                   return;
                 }
-                const token = await getAccessToken();
+                const token = await getBrowserAccessToken();
                 const res = await fetch("/api/psp/penetrometer-options", {
                   method: "POST",
                   headers: {
@@ -1197,7 +1191,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                   });
                   return;
                 }
-                const token = await getAccessToken();
+                const token = await getBrowserAccessToken();
                 const res = await fetch(
                   `/api/psp/penetrometer-options/${penetrometerEditId}`,
                   {

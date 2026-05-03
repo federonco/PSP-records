@@ -1,5 +1,6 @@
 "use client";
 
+import type { Session } from "@supabase/supabase-js";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
@@ -13,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type RecordRow = {
   id: string;
@@ -53,16 +54,16 @@ export default function RecordsPage() {
   const [editLayers, setEditLayers] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setAuthEmail(data.session?.user.email ?? null);
-    });
+    void supabase.auth.getSession().then(
+      ({ data }: { data: { session: Session | null } }) => {
+        setAuthEmail(data.session?.user.email ?? null);
+      },
+    );
   }, [supabase]);
 
   useEffect(() => {
     const load = async () => {
       if (!sectionId) return;
-      console.log("[view-records] sectionId:", sectionId);
-      console.log("[view-records] subsectionId:", subsectionId);
       setLoading(true);
       const baseSelect =
         "id, chainage, recorded_at, unified_section_id, subsection_id, location_id, site_inspector, sign_off_by, sign_off_at, l1_150, l1_450, l1_750, l2_150, l2_450, l2_750, l3_150, l3_450, l3_750, compactor_sn";
@@ -199,9 +200,13 @@ export default function RecordsPage() {
         l3_750: Number(editLayers.l3_750),
       },
     };
+    const token = await getBrowserAccessToken();
     const response = await fetch("/api/psp/records/overwrite", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
     setSaving(false);

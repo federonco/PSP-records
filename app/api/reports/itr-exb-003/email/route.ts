@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   sendEmail,
   getSenderAddress,
   buildHtmlBody,
 } from "@/lib/email";
-import { isAdminEmail } from "@/lib/admin";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { generateITRExb003Pdf, resolvePspLocation } from "@/lib/reporting/itr-exb-003";
 
 export const runtime = "nodejs";
@@ -21,19 +20,10 @@ function extractErrorMessage(error: unknown) {
 }
 
 
-async function getEmailFromToken(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ")
-    ? authHeader.slice("Bearer ".length)
-    : null;
-  if (!token) return null;
-  const supabase = getSupabaseServer({ accessToken: token });
-  const { data, error } = await supabase.auth.getUser();
-  if (error) return null;
-  return data.user?.email ?? null;
-}
-
 export async function POST(request: NextRequest) {
+  const gate = await requireOnSiteBAdmin(request);
+  if (!gate.ok) return gate.response;
+
   const body = await request.json();
   const reportNum = Number.parseInt(String(body.reportNum ?? ""), 10);
   const includeOpen = Boolean(body.includeOpen);
@@ -55,14 +45,6 @@ export async function POST(request: NextRequest) {
   const resolved = await resolvePspLocation(locationId, locationName);
   if (!resolved) {
     return NextResponse.json({ error: "Location not found" }, { status: 404 });
-  }
-
-  const adminEmail = await getEmailFromToken(request);
-  if (!adminEmail) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (process.env.ADMIN_EMAIL_ALLOWLIST && !isAdminEmail(adminEmail)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
   if (!process.env.RESEND_API_KEY) {

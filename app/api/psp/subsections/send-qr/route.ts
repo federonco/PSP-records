@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminEmail } from "@/lib/admin";
-import { getUserFromRequest } from "@/lib/api-auth";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import {
   buildQrEmailHtml,
   buildQrEmailText,
@@ -19,13 +18,8 @@ function safePdfFilename(name: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const { user, token } = await getUserFromRequest(request);
-  if (!user || !token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireOnSiteBAdmin(request);
+  if (!auth.ok) return auth.response;
 
   let body: { subsectionId?: string; email?: string };
   try {

@@ -1,5 +1,6 @@
  "use client";
 
+ import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
  import { useEffect, useState } from "react";
  import Link from "next/link";
  import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -22,13 +23,15 @@
    const [resetLoading, setResetLoading] = useState(false);
 
    useEffect(() => {
-     supabase.auth.getSession().then(({ data }) => {
+     void supabase.auth.getSession().then(
+       ({ data }: { data: { session: Session | null } }) => {
        const sessionEmail = data.session?.user.email ?? null;
        setCurrentEmail(sessionEmail);
        onAuthChange?.(sessionEmail);
-     });
+     },
+     );
      const { data: subscription } = supabase.auth.onAuthStateChange(
-       (_event, session) => {
+       (_event: AuthChangeEvent, session: Session | null) => {
          const sessionEmail = session?.user.email ?? null;
          setCurrentEmail(sessionEmail);
          onAuthChange?.(sessionEmail);

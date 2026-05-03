@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { getUserFromRequest } from "@/lib/api-auth";
-import { isAdminEmail } from "@/lib/admin";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { sendEmail, getSenderAddress, buildHtmlBody } from "@/lib/email";
 import { generateITRExb003Pdf, resolvePspLocation } from "@/lib/reporting/itr-exb-003";
@@ -34,13 +33,8 @@ async function normalizePdfBuffer(buf: unknown): Promise<Buffer> {
 
 export async function POST(request: NextRequest) {
   try {
-    const { user } = await getUserFromRequest(request);
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    if (!isAdminEmail(user.email)) {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+    const gate = await requireOnSiteBAdmin(request);
+    if (!gate.ok) return gate.response;
 
     const body = await request.json();
     const unifiedSectionId = body?.unified_section_id as string | undefined;

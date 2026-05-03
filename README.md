@@ -16,15 +16,9 @@ npm run dev
 
 ## Admin access
 
-Admins are checked in two places:
+Admin UI and protected APIs require a Supabase Auth session whose user has a row in `public.user_app_roles` with `app_id = 'onsite-b'` and `role` in (`admin`, `super_admin`). Manage users and roles from the Dashboard (source of truth).
 
-- **App allowlist**: add comma-separated emails to `ADMIN_EMAIL_ALLOWLIST`.
-- **DB policy**: insert users into `psp_admins`:
-
-```sql
-insert into psp_admins (user_id, email)
-values ('<auth.user.id>', '<email>');
-```
+Optional: default outbound report email uses `REPORT_DEFAULT_EMAIL` (comma-separated allowed).
 
 ## Block computation
 
@@ -38,7 +32,7 @@ Blocks are calculated from the maximum chainage at a location:
 
 - Index page uses `/api/psp/signoff-record`.
 - Admin page uses `/api/psp/signoff-block`.
-- Sign-off requires an admin allowlist match and `psp_admins` membership.
+- Sign-off APIs require the same `user_app_roles` admin role as `/admin` (Bearer token).
 - Force overwrite is required to replace an existing sign-off.
 
 ## Sections + signatures

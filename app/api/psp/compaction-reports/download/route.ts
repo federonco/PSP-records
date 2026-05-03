@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
-import { isAdminEmail } from "@/lib/admin";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { CHAINAGE_STEP } from "@/lib/psp";
 import { type CompactionTemplateData } from "@/lib/reporting/compaction";
@@ -9,14 +8,8 @@ import { generateCompactionPdf } from "@/lib/reporting/compaction-pdf";
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
-  const { user } = await getUserFromRequest(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
+  const auth = await requireOnSiteBAdmin(request);
+  if (!auth.ok) return auth.response;
 
   const body = await request.json();
   const reportId = body?.reportId as string | undefined;

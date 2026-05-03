@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminEmail } from "@/lib/admin";
-import { getUserFromRequest } from "@/lib/api-auth";
+import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 const ONSITE_B = "onsite-b";
@@ -8,6 +7,8 @@ const ONSITE_B = "onsite-b";
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
+  const auth = await requireOnSiteBAdmin(request);
+  if (!auth.ok) return auth.response;
   const supabase = getSupabaseServer({ useServiceRole: true });
   const sectionId = new URL(request.url).searchParams.get("sectionId");
 
@@ -32,13 +33,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { user, token } = await getUserFromRequest(request);
-  if (!user || !token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!isAdminEmail(user.email)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireOnSiteBAdmin(request);
+  if (!auth.ok) return auth.response;
 
   let body: {
     section_id?: string;

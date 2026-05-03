@@ -11,7 +11,7 @@ import {
   LOCATION_LIST_SELECT,
   mergeLocationAppConfig,
 } from "@/lib/location-app-config";
- import { getSupabaseBrowser } from "@/lib/supabase/browser";
+ import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
  import { Modal } from "@/components/modal";
  import { Button } from "@/components/ui/button";
  import {
@@ -295,14 +295,6 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   const [compactionPanelExpanded, setCompactionPanelExpanded] = useState<
     Record<string, boolean>
   >({});
-  const getAccessToken = async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session?.access_token) {
-      return data.session.access_token;
-    }
-    const refreshed = await supabase.auth.refreshSession();
-    return refreshed.data.session?.access_token ?? null;
-  };
   const locationIdsKey = useMemo(
     () => [...new Set(locations.map((l) => l.id))].sort().join(","),
     [locations],
@@ -389,7 +381,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   }, [authEmail, pushToast, supabase]);
 
   const loadUnifiedSections = async () => {
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     const response = await fetch("/api/psp/sections", {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
@@ -501,7 +493,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     const { locationId, locationName, sectionId, subsectionId } = args;
     if (!locationId || !authEmail) return;
     setSyncingLocationId(locationId);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       setSyncingLocationId(null);
       pushToast({
@@ -618,7 +610,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({
         type: "error",
@@ -722,7 +714,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       return;
     }
     const incN = Number(createSubIncrement);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({
         type: "error",
@@ -839,7 +831,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     }
     mergedApp.chainage_increment = Number.isFinite(incN) ? incN : 20;
 
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({
         type: "error",
@@ -923,7 +915,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({
         type: "error",
@@ -978,7 +970,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     const auditLoc = locations.find((l) => l.id === auditLocationId);
     const auditName = auditLoc?.name ?? "";
     setLoading(true);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       setLoading(false);
       pushToast({
@@ -1034,7 +1026,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
    const handleSignOffBlock = async (block: BlockInfo, forLocationId: string) => {
      setLoading(true);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       setLoading(false);
       pushToast({
@@ -1089,7 +1081,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     forLocationName: string,
   ) => {
      setLoading(true);
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       setLoading(false);
       pushToast({
@@ -1155,7 +1147,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
   const handleSendAuditByScope = async () => {
     if (!reportScope) return;
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({ type: "error", title: "Sign in required" });
       return;
@@ -1195,7 +1187,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
   const handleSendAllItr = async () => {
     if (!reportScope) return;
-    const token = await getAccessToken();
+    const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({ type: "error", title: "Sign in required" });
       return;
@@ -1299,9 +1291,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
     const length = Math.abs(endValue - startValue);
 
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
-    if (!token) {
+    if (!(await getBrowserAccessToken())) {
       pushToast({
         type: "error",
         title: "Sign in required",

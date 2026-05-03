@@ -6,7 +6,7 @@ export async function GET() {
       supabase_anon_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       supabase_service_role: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
       supabase_storage_bucket: !!process.env.SUPABASE_STORAGE_BUCKET,
-      admin_allowlist: !!process.env.ADMIN_EMAIL_ALLOWLIST,
+      report_default_email: !!process.env.REPORT_DEFAULT_EMAIL,
       smtp_host: !!process.env.SMTP_HOST,
       smtp_port: !!process.env.SMTP_PORT,
       smtp_user: !!process.env.SMTP_USER,

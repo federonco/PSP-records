@@ -3,7 +3,7 @@
  import { Suspense, useEffect, useMemo, useState } from "react";
  import Link from "next/link";
  import { useSearchParams } from "next/navigation";
- import { getSupabaseBrowser } from "@/lib/supabase/browser";
+ import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
  import { useToast } from "@/components/toast";
  import { Button } from "@/components/ui/button";
  import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,8 +114,7 @@ function RecordEditContent() {
    const handleSave = async () => {
      if (!record || !canSubmit) return;
      setLoading(true);
-     const session = await supabase.auth.getSession();
-     const token = session.data.session?.access_token;
+     const token = await getBrowserAccessToken();
      const response = await fetch("/api/psp/records/overwrite", {
        method: "POST",
        headers: {
@@ -195,8 +194,7 @@ function RecordEditContent() {
     );
     if (!confirmed) return;
     setLoading(true);
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token;
+    const token = await getBrowserAccessToken();
     const response = await fetch("/api/psp/records/delete", {
       method: "POST",
       headers: {
