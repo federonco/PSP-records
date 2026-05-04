@@ -63,7 +63,6 @@ export async function POST(request: NextRequest) {
       .from("psp_reports")
       .select("*")
       .eq("unified_section_id", unifiedSectionId)
-      .eq("status", "READY")
       .eq("report_type", "compaction")
       .order("block_key", { ascending: false });
 
