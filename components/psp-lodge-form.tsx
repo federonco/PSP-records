@@ -75,6 +75,7 @@ import { Loader2 } from "lucide-react";
  };
 
  type PenetrometerOption = { id: string; serial_text: string; sort_order: number };
+type SupervisorOption = { id: string; name: string; company: string | null };
 
  const layerFields = [
    { key: "l1_150", label: "150-450mm" },
@@ -89,8 +90,6 @@ import { Loader2 } from "lucide-react";
  ] as const;
 
  type LayerKey = (typeof layerFields)[number]["key"];
-
-const inspectorOptions = ["Cliff Dawson", "Adam O'Neill"];
 
 export type PspLodgeLockedEntry = {
   /** Legacy PSP site row; optional when entering via unified QR only. */
@@ -146,6 +145,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [penetrometerEditId, setPenetrometerEditId] = useState<string | null>(null);
   const [penetrometerEditInput, setPenetrometerEditInput] = useState("#3059-0325");
   const [signatureOpen, setSignatureOpen] = useState(false);
+  const [supervisorOptions, setSupervisorOptions] = useState<SupervisorOption[]>([]);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
 
@@ -303,6 +303,29 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     };
     loadOptions();
   }, [locationId]);
+
+  useEffect(() => {
+    if (!unifiedSectionId) {
+      setSupervisorOptions([]);
+      return;
+    }
+    const loadSupervisors = async () => {
+      const token = await getBrowserAccessToken();
+      const query = selectedSubsectionId
+        ? `subsection_id=${selectedSubsectionId}`
+        : `section_id=${unifiedSectionId}`;
+      const response = await fetch(`/api/psp/supervisors/assignments?${query}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        setSupervisorOptions([]);
+        return;
+      }
+      setSupervisorOptions((payload.supervisors ?? []) as SupervisorOption[]);
+    };
+    void loadSupervisors();
+  }, [selectedSubsectionId, unifiedSectionId]);
 
   useEffect(() => {
     if (!unifiedSectionId) {
@@ -955,11 +978,17 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               <SelectValue placeholder="Select inspector" />
             </SelectTrigger>
             <SelectContent>
-              {inspectorOptions.map((name) => (
-                <SelectItem key={name} value={name}>
-                  {name}
+              {supervisorOptions.length ? (
+                supervisorOptions.map((supervisor) => (
+                  <SelectItem key={supervisor.id} value={supervisor.name}>
+                    {supervisor.name}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="__none__" disabled>
+                  No supervisors assigned — contact admin
                 </SelectItem>
-              ))}
+              )}
             </SelectContent>
           </Select>
 

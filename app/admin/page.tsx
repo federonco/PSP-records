@@ -21,6 +21,7 @@ import {
    DialogHeader,
    DialogTitle,
  } from "@/components/ui/dialog";
+ import { Badge } from "@/components/ui/badge";
  import { Input } from "@/components/ui/input";
  import {
    Select,
@@ -38,6 +39,7 @@ import {
    DropdownMenuSubTrigger,
    DropdownMenuTrigger,
  } from "@/components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Location = {
   id: string;
@@ -85,6 +87,36 @@ type UnifiedSectionRow = {
 type SendQrTarget =
   | { kind: "section"; section: UnifiedSectionRow }
   | { kind: "subsection"; subsection: UnifiedSubsectionRow; sectionName: string };
+type Supervisor = { id: string; name: string; company: string | null };
+
+type SupervisorOverviewEntry = {
+  id: string;
+  name: string;
+  company: string | null;
+  sections: {
+    id: string;
+    name: string;
+    chainage_start?: number;
+    chainage_end?: number;
+  }[];
+  subsections: {
+    id: string;
+    name: string;
+    parent_section_name: string;
+  }[];
+};
+
+function formatSectionChainageOverview(
+  start?: number,
+  end?: number,
+): string | null {
+  const hasStart = typeof start === "number" && Number.isFinite(start);
+  const hasEnd = typeof end === "number" && Number.isFinite(end);
+  if (hasStart && hasEnd) return `${start} → ${end}`;
+  if (hasStart) return String(start);
+  if (hasEnd) return String(end);
+  return null;
+}
 
 function getSectionFamilyKey(name: string): string | null {
   const direct = /^\s*section\s+(\d+)\s*$/i.exec(name);
@@ -295,6 +327,24 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   const [compactionPanelExpanded, setCompactionPanelExpanded] = useState<
     Record<string, boolean>
   >({});
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+  const [supervisorNameInput, setSupervisorNameInput] = useState("");
+  const [supervisorCompanyInput, setSupervisorCompanyInput] = useState("");
+  const [supervisorEditId, setSupervisorEditId] = useState<string | null>(null);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignScope, setAssignScope] = useState<{
+    sectionId?: string;
+    subsectionId?: string;
+    title: string;
+  } | null>(null);
+  const [assignedSupervisors, setAssignedSupervisors] = useState<Supervisor[]>([]);
+  const [assignSupervisorId, setAssignSupervisorId] = useState("");
+  const [adminMainTab, setAdminMainTab] = useState("sections");
+  const [supervisorOverview, setSupervisorOverview] = useState<
+    SupervisorOverviewEntry[]
+  >([]);
+  const [supervisorOverviewLoading, setSupervisorOverviewLoading] =
+    useState(false);
   const locationIdsKey = useMemo(
     () => [...new Set(locations.map((l) => l.id))].sort().join(","),
     [locations],
@@ -397,9 +447,81 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     setUnifiedSections((payload.sections ?? []) as UnifiedSectionRow[]);
   };
 
+  const loadSupervisors = async () => {
+    const token = await getBrowserAccessToken();
+    const response = await fetch("/api/psp/supervisors", {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Failed to load supervisors",
+        message: payload.error ?? "Unknown error",
+      });
+      return;
+    }
+    setSupervisors((payload.supervisors ?? []) as Supervisor[]);
+  };
+
+  const loadAssignments = async (scope: { sectionId?: string; subsectionId?: string }) => {
+    const token = await getBrowserAccessToken();
+    const query = scope.subsectionId
+      ? `subsection_id=${scope.subsectionId}`
+      : `section_id=${scope.sectionId}`;
+    const response = await fetch(`/api/psp/supervisors/assignments?${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Failed to load assignments",
+        message: payload.error ?? "Unknown error",
+      });
+      return;
+    }
+    setAssignedSupervisors((payload.supervisors ?? []) as Supervisor[]);
+  };
+
+  const loadSupervisorOverview = async () => {
+    const token = await getBrowserAccessToken();
+    if (!token) return;
+    setSupervisorOverviewLoading(true);
+    try {
+      const response = await fetch("/api/psp/supervisors/overview", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        pushToast({
+          type: "error",
+          title: "Overview failed",
+          message:
+            typeof payload?.error === "string"
+              ? payload.error
+              : "Unable to load supervisor assignments overview.",
+        });
+        setSupervisorOverview([]);
+        return;
+      }
+      setSupervisorOverview(
+        Array.isArray(payload) ? (payload as SupervisorOverviewEntry[]) : [],
+      );
+    } finally {
+      setSupervisorOverviewLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authEmail || adminMainTab !== "supervisors") return;
+    void loadSupervisorOverview();
+  }, [authEmail, adminMainTab]);
+
   useEffect(() => {
     if (!authEmail) return;
     loadUnifiedSections();
+    loadSupervisors();
   }, [authEmail, pushToast]);
 
   useEffect(() => {
@@ -1402,6 +1524,128 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     setPenetrometerOpen(false);
   };
 
+  const handleSaveSupervisor = async () => {
+    const name = supervisorNameInput.trim();
+    if (!name) return;
+    const token = await getBrowserAccessToken();
+    const isEdit = Boolean(supervisorEditId);
+    const response = await fetch(
+      isEdit ? `/api/psp/supervisors/${supervisorEditId}` : "/api/psp/supervisors",
+      {
+        method: isEdit ? "PATCH" : "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          name,
+          company: supervisorCompanyInput.trim() || null,
+        }),
+      },
+    );
+    const payload = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Supervisor save failed",
+        message: payload.error ?? "Unknown error",
+      });
+      return;
+    }
+    setSupervisorNameInput("");
+    setSupervisorCompanyInput("");
+    setSupervisorEditId(null);
+    await loadSupervisors();
+  };
+
+  const handleDeleteSupervisor = async (id: string) => {
+    const token = await getBrowserAccessToken();
+    const response = await fetch(`/api/psp/supervisors/${id}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Supervisor delete failed",
+        message: payload.error ?? "Unknown error",
+      });
+      return;
+    }
+    await loadSupervisors();
+    if (adminMainTab === "supervisors") {
+      await loadSupervisorOverview();
+    }
+  };
+
+  const openAssignSupervisors = async (scope: {
+    sectionId?: string;
+    subsectionId?: string;
+    title: string;
+  }) => {
+    setAssignScope(scope);
+    setAssignOpen(true);
+    setAssignSupervisorId("");
+    await loadAssignments(scope);
+  };
+
+  const handleAssignSupervisor = async () => {
+    if (!assignScope || !assignSupervisorId) return;
+    const token = await getBrowserAccessToken();
+    const response = await fetch("/api/psp/supervisors/assignments", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        supervisor_id: assignSupervisorId,
+        section_id: assignScope.sectionId,
+        subsection_id: assignScope.subsectionId,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Assignment failed",
+        message: payload.error ?? "Unknown error",
+      });
+      return;
+    }
+    await loadAssignments(assignScope);
+    await loadSupervisorOverview();
+  };
+
+  const handleUnassignSupervisor = async (supervisorId: string) => {
+    if (!assignScope) return;
+    const token = await getBrowserAccessToken();
+    const response = await fetch("/api/psp/supervisors/assignments", {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        supervisor_id: supervisorId,
+        section_id: assignScope.sectionId,
+        subsection_id: assignScope.subsectionId,
+      }),
+    });
+    const payload = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Remove assignment failed",
+        message: payload.error ?? "Unknown error",
+      });
+      return;
+    }
+    await loadAssignments(assignScope);
+    await loadSupervisorOverview();
+  };
+
   const handleOpenEditRecord = () => {
     setEditRecordLocationId(locations[0]?.id ?? "");
     setEditRecordChainage("");
@@ -1880,7 +2124,16 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
           </div>
         </header>
 
-        <div className="space-y-4">
+        <Tabs
+          value={adminMainTab}
+          onValueChange={setAdminMainTab}
+          className="w-full"
+        >
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="sections">Sections</TabsTrigger>
+            <TabsTrigger value="supervisors">Supervisors</TabsTrigger>
+          </TabsList>
+          <TabsContent value="sections" className="mt-4 space-y-4">
           {normalizedSections.length === 0 ? (
             <div className="flex justify-end pb-1">
               <DropdownMenu>
@@ -1933,7 +2186,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               </DropdownMenu>
             </div>
           ) : null}
-          {normalizedSections.map((section, sectionIndex) => {
+          {normalizedSections.map((section) => {
             const chainageText = formatSectionChainageText(section);
             const sectionScopeReports = compactionReports.filter(
               (r) =>
@@ -1982,58 +2235,67 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                     >
                       Send QR
                     </Button>
-                    {sectionIndex === 0 ? (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-9 w-9 shrink-0 border-[#E6EDF3] bg-[#E6EDF3] px-0 text-sm hover:bg-[#F7F9FB] hover:border-[#F7F9FB] active:bg-[#F7F9FB] active:border-[#F7F9FB]"
-                            disabled={!authEmail}
-                          >
-                            ⋮
-                          </Button>
-                        </DropdownMenuTrigger>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 w-9 shrink-0 border-[#E6EDF3] bg-[#E6EDF3] px-0 text-sm hover:bg-[#F7F9FB] hover:border-[#F7F9FB] active:bg-[#F7F9FB] active:border-[#F7F9FB]"
+                          disabled={!authEmail}
+                        >
+                          ⋮
+                        </Button>
+                      </DropdownMenuTrigger>
 
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger disabled={!authEmail}>
-                              Subsection
-                            </DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>
-                              <DropdownMenuItem
-                                onClick={openCreateSubsectionFromMenu}
-                                disabled={!authEmail || !normalizedSections.length}
-                              >
-                                Create
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={openEditSubsectionFromMenu}
-                                disabled={
-                                  !authEmail || !subsectionEditOptions.length
-                                }
-                              >
-                                Edit
-                              </DropdownMenuItem>
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
-                          <DropdownMenuItem
-                            onClick={handleOpenEditRecord}
-                            disabled={!locations.length}
-                          >
-                            Edit record
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setAuditLocationId(locations[0]?.id ?? "");
-                              setAuditOpen(true);
-                            }}
-                          >
-                            Audit
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    ) : null}
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger disabled={!authEmail}>
+                            Subsection
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent>
+                            <DropdownMenuItem
+                              onClick={openCreateSubsectionFromMenu}
+                              disabled={!authEmail || !normalizedSections.length}
+                            >
+                              Create
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={openEditSubsectionFromMenu}
+                              disabled={
+                                !authEmail || !subsectionEditOptions.length
+                              }
+                            >
+                              Edit
+                            </DropdownMenuItem>
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        <DropdownMenuItem
+                          onClick={handleOpenEditRecord}
+                          disabled={!locations.length}
+                        >
+                          Edit record
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => {
+                            setAuditLocationId(locations[0]?.id ?? "");
+                            setAuditOpen(true);
+                          }}
+                        >
+                          Audit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            void openAssignSupervisors({
+                              sectionId: section.id,
+                              title: section.name,
+                            })
+                          }
+                          disabled={!authEmail}
+                        >
+                          Assign Supervisors
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
 
@@ -2089,6 +2351,31 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                             >
                               Send QR
                             </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 shrink-0 border-[#E6EDF3] bg-[#E6EDF3] px-0 text-xs hover:bg-[#F7F9FB] hover:border-[#F7F9FB] active:bg-[#F7F9FB] active:border-[#F7F9FB]"
+                                  disabled={!authEmail}
+                                >
+                                  ⋮
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    void openAssignSupervisors({
+                                      subsectionId: sub.id,
+                                      title: `${section.name} — ${sub.name}`,
+                                    })
+                                  }
+                                  disabled={!authEmail}
+                                >
+                                  Assign Supervisors
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
                         </div>
                         {renderCompactionScopePanel({
@@ -2112,7 +2399,159 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               No sections or sites loaded. Create a site to get started.
             </p>
           ) : null}
-        </div>
+          </TabsContent>
+          <TabsContent value="supervisors" className="mt-4 space-y-4">
+          <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-lg font-bold text-[var(--ink)]">Supervisors</h2>
+            </div>
+            <div className="mt-3 grid gap-2">
+              {supervisors.map((sup) => (
+                <div key={sup.id} className="flex items-center gap-2 rounded-[12px] bg-[var(--surface-alt)] p-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-[var(--ink)]">{sup.name}</p>
+                    <p className="truncate text-xs text-[var(--muted-foreground)]">{sup.company ?? "—"}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSupervisorEditId(sup.id);
+                      setSupervisorNameInput(sup.name);
+                      setSupervisorCompanyInput(sup.company ?? "");
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={() => void handleDeleteSupervisor(sup.id)}>
+                    Delete
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Input
+                className="psp-input"
+                value={supervisorNameInput}
+                onChange={(e) => setSupervisorNameInput(e.target.value)}
+                placeholder="Supervisor name"
+              />
+              <Input
+                className="psp-input"
+                value={supervisorCompanyInput}
+                onChange={(e) => setSupervisorCompanyInput(e.target.value)}
+                placeholder="Company (optional)"
+              />
+              <Button className="psp-button psp-button-primary" onClick={() => void handleSaveSupervisor()}>
+                {supervisorEditId ? "Update Supervisor" : "Add Supervisor"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-[20px] border border-[var(--border)] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
+            <h2 className="text-lg font-bold text-[var(--ink)]">
+              Supervisor Assignments Overview
+            </h2>
+            <p className="mt-1 text-xs text-[var(--muted-foreground)]">
+              Sections and subsections linked to each supervisor.
+            </p>
+            {supervisorOverviewLoading ? (
+              <p className="mt-4 text-sm text-[var(--muted-foreground)]">
+                Loading…
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-3">
+                {supervisorOverview.map((row) => {
+                  const hasAny =
+                    row.sections.length > 0 || row.subsections.length > 0;
+                  return (
+                    <div
+                      key={row.id}
+                      className="rounded-[14px] border border-[var(--border)]/80 bg-[var(--surface-alt)] p-3 shadow-[0_1px_3px_rgba(0,0,0,0.04)]"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[var(--ink)]">
+                            {row.name}
+                          </p>
+                          <p className="text-xs text-[var(--muted-foreground)]">
+                            {row.company?.trim()
+                              ? row.company
+                              : "No company"}
+                          </p>
+                        </div>
+                        {!hasAny ? (
+                          <Badge variant="outline" className="shrink-0 text-[var(--muted-foreground)]">
+                            Unassigned
+                          </Badge>
+                        ) : null}
+                      </div>
+                      <div className="mt-3 space-y-2 text-xs">
+                        <div>
+                          <p className="font-semibold text-[var(--ink)]">
+                            Sections
+                          </p>
+                          {row.sections.length ? (
+                            <ul className="mt-1 space-y-1 text-[var(--muted-foreground)]">
+                              {row.sections.map((sec) => {
+                                const ch = formatSectionChainageOverview(
+                                  sec.chainage_start,
+                                  sec.chainage_end,
+                                );
+                                return (
+                                  <li key={sec.id}>
+                                    <span className="font-medium text-[var(--ink)]">
+                                      {sec.name}
+                                    </span>
+                                    {ch ? (
+                                      <span className="text-[var(--muted-foreground)]">
+                                        {" "}
+                                        · Chainage: {ch}
+                                      </span>
+                                    ) : null}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-[var(--muted-foreground)]">
+                              —
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-[var(--ink)]">
+                            Subsections
+                          </p>
+                          {row.subsections.length ? (
+                            <ul className="mt-1 space-y-1 text-[var(--muted-foreground)]">
+                              {row.subsections.map((sub) => (
+                                <li key={sub.id}>
+                                  <span className="font-medium text-[var(--ink)]">
+                                    {sub.name}
+                                  </span>
+                                  <span className="text-[var(--muted-foreground)]">
+                                    {" "}
+                                    · {sub.parent_section_name}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1 text-[var(--muted-foreground)]">
+                              —
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          </TabsContent>
+        </Tabs>
 
       </div>
 
@@ -2419,6 +2858,46 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               {sendPdfLoading ? "Sending…" : "Send"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign Supervisors — {assignScope?.title ?? ""}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-2">
+              {assignedSupervisors.map((sup) => (
+                <div key={sup.id} className="flex items-center justify-between rounded-[10px] bg-[var(--surface-alt)] px-3 py-2">
+                  <p className="text-sm">{sup.name}</p>
+                  <Button variant="ghost" size="sm" onClick={() => void handleUnassignSupervisor(sup.id)}>
+                    ✕
+                  </Button>
+                </div>
+              ))}
+              {!assignedSupervisors.length ? (
+                <p className="text-xs text-[var(--muted-foreground)]">No supervisors assigned.</p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2">
+              <Select value={assignSupervisorId} onValueChange={setAssignSupervisorId}>
+                <SelectTrigger className="psp-input">
+                  <SelectValue placeholder="Select supervisor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {supervisors.map((sup) => (
+                    <SelectItem key={sup.id} value={sup.id}>
+                      {sup.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={() => void handleAssignSupervisor()} disabled={!assignSupervisorId}>
+                Add
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

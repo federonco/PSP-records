@@ -48,6 +48,16 @@ export async function userIdHasOnSiteBSuperAdmin(userId: string): Promise<boolea
   return userHasRoles(userId, ["super_admin"]);
 }
 
+export function isAdminEmail(email?: string | null) {
+  const allowlist = process.env.ADMIN_EMAIL_ALLOWLIST;
+  if (!allowlist || !email) return false;
+  const allowed = allowlist
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  return allowed.includes(email.toLowerCase());
+}
+
 /**
  * API routes that use Authorization: Bearer &lt;access_token&gt;.
  * Returns 401 if missing session or no onsite-b admin role.
