@@ -147,7 +147,7 @@ export async function generateITRExb003Pdf(params: {
   const { data: records, error: recordsError } = await supabase
     .from("psp_records")
     .select(
-      "recorded_at,chainage,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,site_inspector",
+      "recorded_at,updated_at,completed_at,chainage,layers_required,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,l4_150,l4_450,l4_750,l5_150,l5_450,l5_750,site_inspector",
     )
     .eq("location_id", locationId)
     .in("chainage", block.expected)
@@ -162,8 +162,21 @@ export async function generateITRExb003Pdf(params: {
   const reportDate = formatDatePerth(new Date().toISOString());
   const recordsPayload = block.expected.map((chainage) => {
     const record = recordMap.get(chainage);
+    const recordedAt = record?.recorded_at ?? null;
+    const updatedAt = record?.updated_at ?? recordedAt;
+    const initialFmt = recordedAt ? formatDatePerth(recordedAt) : "";
+    const updatedFmt =
+      updatedAt != null ? formatDatePerth(updatedAt as string) : initialFmt;
     return {
-      date: record?.recorded_at ? formatDatePerth(record.recorded_at) : "",
+      date: initialFmt,
+      date_initial: initialFmt,
+      date_updated: updatedFmt,
+      record_status: record
+        ? record.completed_at
+          ? "COMPLETE"
+          : "INCOMPLETE"
+        : "",
+      layers_required: record?.layers_required ?? 3,
       ch: record ? chainage : "",
       l1_a: record?.l1_150 ?? "",
       l1_b: record?.l1_450 ?? "",
@@ -174,6 +187,12 @@ export async function generateITRExb003Pdf(params: {
       l3_a: record?.l3_150 ?? "",
       l3_b: record?.l3_450 ?? "",
       l3_c: record?.l3_750 ?? "",
+      l4_a: record?.l4_150 ?? "",
+      l4_b: record?.l4_450 ?? "",
+      l4_c: record?.l4_750 ?? "",
+      l5_a: record?.l5_150 ?? "",
+      l5_b: record?.l5_450 ?? "",
+      l5_c: record?.l5_750 ?? "",
     };
   });
 

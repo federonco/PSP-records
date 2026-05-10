@@ -5,7 +5,14 @@ import libre from "libreoffice-convert";
 
 export type CompactionRecord = {
   date?: string;
+  /** Per-record: initial lodge date (DD/MM/YYYY) */
+  date_initial?: string;
+  /** Per-record: last update date (DD/MM/YYYY) */
+  date_updated?: string;
+  /** INCOMPLETE | COMPLETE */
+  record_status?: string;
   ch?: string | number;
+  layers_required?: number;
   l1_a?: string | number;
   l1_b?: string | number;
   l1_c?: string | number;
@@ -15,6 +22,12 @@ export type CompactionRecord = {
   l3_a?: string | number;
   l3_b?: string | number;
   l3_c?: string | number;
+  l4_a?: string | number;
+  l4_b?: string | number;
+  l4_c?: string | number;
+  l5_a?: string | number;
+  l5_b?: string | number;
+  l5_c?: string | number;
 };
 
 export type CompactionTemplateData = {

@@ -345,6 +345,16 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   >([]);
   const [supervisorOverviewLoading, setSupervisorOverviewLoading] =
     useState(false);
+  const [depthConfigOpen, setDepthConfigOpen] = useState(false);
+  const [depthSectionId, setDepthSectionId] = useState<string | null>(null);
+  const [depthSubsectionId, setDepthSubsectionId] = useState<string | null>(null);
+  /** When true, `depthSubsectionId` is a `sections.id` (dotted section shown as child), not `subsections.id`. */
+  const [depthSubsectionIsPromotedSection, setDepthSubsectionIsPromotedSection] =
+    useState(false);
+  const [depthSectionName, setDepthSectionName] = useState("");
+  const [depthRanges, setDepthRanges] = useState<
+    { from_ch: string; to_ch: string; max_depth_m: string }[]
+  >([{ from_ch: "", to_ch: "", max_depth_m: "" }]);
   const locationIdsKey = useMemo(
     () => [...new Set(locations.map((l) => l.id))].sort().join(","),
     [locations],
@@ -1669,6 +1679,181 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     );
   };
 
+  function calcLayers(depthM: number): number {
+    const depthMm = depthM * 1000;
+    const layers = Math.ceil((depthMm - 150) / 900);
+    return Math.max(layers, 1);
+  }
+
+  function buildDepthRowsFromAppConfig(
+    appConfig: Record<string, unknown> | null | undefined,
+  ): { from_ch: string; to_ch: string; max_depth_m: string }[] {
+    const raw =
+      appConfig &&
+      typeof appConfig === "object" &&
+      !Array.isArray(appConfig)
+        ? appConfig.depth_ranges
+        : null;
+    const parsed = Array.isArray(raw)
+      ? raw
+          .map((r) => ({
+            from_ch: String((r as Record<string, unknown>).from_ch ?? ""),
+            to_ch: String((r as Record<string, unknown>).to_ch ?? ""),
+            max_depth_m: (() => {
+              const mm = Number(
+                (r as Record<string, unknown>).max_depth_mm ?? Number.NaN,
+              );
+              if (!Number.isFinite(mm)) return "";
+              return String(mm / 1000);
+            })(),
+          }))
+          .filter((r) => r.from_ch || r.to_ch || r.max_depth_m)
+      : [];
+    const normalized = parsed.map((r) => {
+      const depthM = Number(r.max_depth_m);
+      if (Number.isFinite(depthM)) {
+        const snappedLayers = calcLayers(depthM);
+        const snappedDepthM = (150 + snappedLayers * 900) / 1000;
+        return { ...r, max_depth_m: String(snappedDepthM) };
+      }
+      return r;
+    });
+    return normalized.length
+      ? normalized
+      : [{ from_ch: "", to_ch: "", max_depth_m: "" }];
+  }
+
+  const openDepthConfig = (section: UnifiedSectionRow) => {
+    setDepthSubsectionId(null);
+    setDepthSubsectionIsPromotedSection(false);
+    setDepthSectionId(section.id);
+    setDepthSectionName(section.name);
+    const cfg =
+      section.app_config &&
+      typeof section.app_config === "object" &&
+      !Array.isArray(section.app_config)
+        ? (section.app_config as Record<string, unknown>)
+        : null;
+    setDepthRanges(buildDepthRowsFromAppConfig(cfg));
+    setDepthConfigOpen(true);
+  };
+
+  const openDepthConfigForSubsection = (
+    section: UnifiedSectionRow,
+    sub: UnifiedSubsectionRow,
+  ) => {
+    setDepthSubsectionId(sub.id);
+    setDepthSubsectionIsPromotedSection(sub.source_kind === "section");
+    setDepthSectionId(section.id);
+    setDepthSectionName(`${section.name} — ${sub.name}`);
+    const subCfg =
+      sub.app_config &&
+      typeof sub.app_config === "object" &&
+      !Array.isArray(sub.app_config)
+        ? (sub.app_config as Record<string, unknown>)
+        : null;
+    setDepthRanges(buildDepthRowsFromAppConfig(subCfg));
+    setDepthConfigOpen(true);
+  };
+
+  const depthValidation = useMemo(() => {
+    const errorsByIndex: Record<number, string[]> = {};
+    const spans = depthRanges.map((r, index) => {
+      const from = Number(r.from_ch);
+      const to = Number(r.to_ch);
+      const depthM = Number(r.max_depth_m);
+      const rowErrors: string[] = [];
+      if (!r.from_ch || !r.to_ch || !r.max_depth_m) {
+        rowErrors.push("All fields are required.");
+      }
+      if (Number.isFinite(from) && Number.isFinite(to) && from >= to) {
+        rowErrors.push("From CH must be lower than To CH.");
+      }
+      if (Number.isFinite(depthM) && (depthM < 0.1 || depthM > 10)) {
+        rowErrors.push("Depth must be between 0.1m and 10.0m");
+      }
+      if (!Number.isFinite(from) || !Number.isFinite(to) || !Number.isFinite(depthM)) {
+        rowErrors.push("Values must be numeric.");
+      }
+      errorsByIndex[index] = rowErrors;
+      return { index, from, to };
+    });
+
+    for (let i = 0; i < spans.length; i += 1) {
+      for (let j = i + 1; j < spans.length; j += 1) {
+        const a = spans[i];
+        const b = spans[j];
+        if (
+          Number.isFinite(a.from) &&
+          Number.isFinite(a.to) &&
+          Number.isFinite(b.from) &&
+          Number.isFinite(b.to) &&
+          a.from < b.to &&
+          b.from < a.to
+        ) {
+          errorsByIndex[a.index] = [
+            ...(errorsByIndex[a.index] ?? []),
+            "Overlaps with another range.",
+          ];
+          errorsByIndex[b.index] = [
+            ...(errorsByIndex[b.index] ?? []),
+            "Overlaps with another range.",
+          ];
+        }
+      }
+    }
+
+    const hasErrors = Object.values(errorsByIndex).some((list) => list.length > 0);
+    return { errorsByIndex, hasErrors };
+  }, [depthRanges]);
+
+  const saveDepthConfig = async () => {
+    const targetId = depthSubsectionId ?? depthSectionId;
+    if (!targetId || depthValidation.hasErrors) return;
+    const token = await getBrowserAccessToken();
+    if (!token) return;
+    const payload = depthRanges
+      .map((r) => ({
+        from_ch: Number(r.from_ch),
+        to_ch: Number(r.to_ch),
+        max_depth_mm: Number(r.max_depth_m) * 1000,
+      }))
+      .filter(
+        (r) =>
+          Number.isFinite(r.from_ch) &&
+          Number.isFinite(r.to_ch) &&
+          Number.isFinite(r.max_depth_mm),
+      );
+    const depthSaveUrl =
+      depthSubsectionId && !depthSubsectionIsPromotedSection
+        ? `/api/psp/subsections/${depthSubsectionId}/config`
+        : `/api/psp/sections/${
+            depthSubsectionId && depthSubsectionIsPromotedSection
+              ? depthSubsectionId
+              : depthSectionId
+          }/config`;
+    const response = await fetch(depthSaveUrl, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ depth_ranges: payload }),
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Depth config failed",
+        message: result.error ?? "Unable to save depth ranges",
+      });
+      return;
+    }
+    pushToast({ type: "success", title: "Depth ranges saved" });
+    setDepthConfigOpen(false);
+    await loadUnifiedSections();
+  };
+
   const resolveSectionScopeSync = (
     section: UnifiedSectionRow,
     scopeReports: CompactionReportRow[],
@@ -2284,6 +2469,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                           Audit
                         </DropdownMenuItem>
                         <DropdownMenuItem
+                          onClick={() => openDepthConfig(section)}
+                          disabled={!authEmail}
+                        >
+                          Configure Depth Ranges
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
                           onClick={() =>
                             void openAssignSupervisors({
                               sectionId: section.id,
@@ -2363,6 +2554,14 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    openDepthConfigForSubsection(section, sub)
+                                  }
+                                  disabled={!authEmail}
+                                >
+                                  Configure Depth Ranges
+                                </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() =>
                                     void openAssignSupervisors({
@@ -2898,6 +3097,159 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={depthConfigOpen}
+        onOpenChange={(open) => {
+          setDepthConfigOpen(open);
+          if (!open) {
+            setDepthSubsectionId(null);
+            setDepthSubsectionIsPromotedSection(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Configure Depth Ranges — {depthSectionName}</DialogTitle>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Define max excavation depth by chainage range. Layers are calculated
+              automatically (default: 3 layers for the entire section).
+            </p>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-[10px] border border-[var(--border)] bg-[var(--surface-alt)] px-3 py-2 text-xs text-[var(--muted-foreground)]">
+              <span className="font-medium text-[var(--ink)]">
+                Default (entire section):
+              </span>{" "}
+              3 layers
+            </div>
+            <div className="overflow-x-auto rounded-[10px] border border-[var(--border)]">
+              <table className="min-w-full text-xs">
+                <thead className="bg-[var(--surface-alt)]">
+                  <tr>
+                    <th className="px-2 py-2 text-left">From CH (m)</th>
+                    <th className="px-2 py-2 text-left">To CH (m)</th>
+                    <th className="px-2 py-2 text-left">Max Depth (m)</th>
+                    <th className="px-2 py-2 text-left">Layers (auto)</th>
+                    <th className="px-2 py-2 text-left">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {depthRanges.map((range, index) => {
+                    const depthM = Number(range.max_depth_m);
+                    const layers = Number.isFinite(depthM) ? calcLayers(depthM) : 3;
+                    const rowErrors = depthValidation.errorsByIndex[index] ?? [];
+                    const rowHasError = rowErrors.length > 0;
+                    const layerTone =
+                      layers <= 2
+                        ? "bg-[var(--muted)] text-[var(--muted-foreground)]"
+                        : layers === 3
+                          ? "bg-[#DBEAFE] text-[#1D4ED8]"
+                          : layers === 4
+                            ? "bg-[#FFEDD5] text-[#C2410C]"
+                            : "bg-[#FEE2E2] text-[#B91C1C]";
+                    return (
+                      <tr key={`${index}-${range.from_ch}`} className="border-t border-[var(--border)]">
+                        <td className="px-2 py-2 align-top">
+                          <Input
+                            type="number"
+                            step="any"
+                            className={`psp-input ${rowHasError ? "border-[#DC2626]" : ""}`}
+                            value={range.from_ch}
+                            onChange={(e) =>
+                              setDepthRanges((prev) =>
+                                prev.map((r, i) =>
+                                  i === index ? { ...r, from_ch: e.target.value } : r,
+                                ),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          <Input
+                            type="number"
+                            step="any"
+                            className={`psp-input ${rowHasError ? "border-[#DC2626]" : ""}`}
+                            value={range.to_ch}
+                            onChange={(e) =>
+                              setDepthRanges((prev) =>
+                                prev.map((r, i) =>
+                                  i === index ? { ...r, to_ch: e.target.value } : r,
+                                ),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          <Input
+                            type="number"
+                            step="any"
+                            className={`psp-input ${rowHasError ? "border-[#DC2626]" : ""}`}
+                            value={range.max_depth_m}
+                            onChange={(e) =>
+                              setDepthRanges((prev) =>
+                                prev.map((r, i) =>
+                                  i === index ? { ...r, max_depth_m: e.target.value } : r,
+                                ),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${layerTone}`}>
+                            {layers} layer{layers === 1 ? "" : "s"}
+                          </span>
+                          {rowHasError ? (
+                            <p className="mt-1 text-[10px] text-[#DC2626]">
+                              {rowErrors[0]}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-2 align-top">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setDepthRanges((prev) => prev.filter((_, i) => i !== index))
+                            }
+                          >
+                            ✕
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setDepthRanges((prev) => [
+                  ...prev,
+                  { from_ch: "", to_ch: "", max_depth_m: "" },
+                ])
+              }
+            >
+              Add range
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDepthConfigOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void saveDepthConfig()}
+              disabled={depthValidation.hasErrors}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+          <p className="text-[10px] text-[var(--muted-foreground)]">
+            Layer calculation: 1 layer ≈ 900mm (150mm offset + 3 × 300mm lifts)
+          </p>
         </DialogContent>
       </Dialog>
 

@@ -1,5 +1,6 @@
 import { CHAINAGE_STEP, START_CHAINAGE } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { getLayerFieldKeysForLayerCount } from "@/lib/psp-depth";
 
 type ResolveLocationInput = {
   locationId?: string | null;
@@ -13,7 +14,8 @@ export type CleanRecordInput = {
   locationName?: string | null;
   chainage: number;
   siteInspector: string;
-  layers: Record<string, number>;
+  layers: Partial<Record<string, number | null>>;
+  layersRequired: number;
   /** Unified `sections.id` (replaces legacy psp_sections.section_id). */
   unifiedSectionId?: string | null;
   subsectionId?: string | null;
@@ -21,18 +23,6 @@ export type CleanRecordInput = {
   legacySectionId?: string | null;
   compactorSn?: string | null;
 };
-
-const layerKeys = [
-  "l1_150",
-  "l1_450",
-  "l1_750",
-  "l2_150",
-  "l2_450",
-  "l2_750",
-  "l3_150",
-  "l3_450",
-  "l3_750",
-] as const;
 
 export async function resolveLocationId({
   locationId,
@@ -56,7 +46,10 @@ export async function resolveLocationId({
   return data?.id ?? null;
 }
 
-export function validateSaveData(input: Record<string, unknown>) {
+export function validateSaveData(
+  input: Record<string, unknown>,
+  layersRequired: number,
+) {
   const errors: string[] = [];
   const clean: CleanRecordInput = {
     locationId: "",
@@ -64,6 +57,7 @@ export function validateSaveData(input: Record<string, unknown>) {
     chainage: 0,
     siteInspector: "",
     layers: {},
+    layersRequired,
     unifiedSectionId: null,
     subsectionId: null,
     legacySectionId: null,
@@ -88,18 +82,24 @@ export function validateSaveData(input: Record<string, unknown>) {
   clean.chainage = Number.isFinite(chainageNumber) ? chainageNumber : 0;
 
   const layers = input.layers as Record<string, unknown> | undefined;
-  layerKeys.forEach((key) => {
-    const raw = layers?.[key];
-    const num = Number(raw);
+  const physicalKeys = getLayerFieldKeysForLayerCount(layersRequired);
+  for (const key of physicalKeys) {
+    if (!layers || !Object.prototype.hasOwnProperty.call(layers, key)) {
+      continue;
+    }
+    const raw = layers[key];
     if (raw === "" || raw === null || raw === undefined) {
-      errors.push(`${key} is required`);
-    } else if (!Number.isFinite(num)) {
+      clean.layers[key] = null;
+      continue;
+    }
+    const num = Number(raw);
+    if (!Number.isFinite(num)) {
       errors.push(`${key} must be a number`);
     } else if (num < 0 || num > 35) {
       errors.push(`${key} must be between 0 and 35`);
     }
     clean.layers[key] = num;
-  });
+  }
 
   const unified =
     String(input.unifiedSectionId ?? input.sectionId ?? "").trim() || null;

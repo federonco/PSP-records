@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
 
   let q = supabase
     .from("psp_records")
-    .select("id,sign_off_by,sign_off_at,signature_strokes")
+    .select("id,sign_off_by,sign_off_at,signature_strokes,layers_required,completed_at,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,l4_150,l4_450,l4_750,l5_150,l5_450,l5_750")
     .eq("unified_section_id", unifiedSectionId)
     .eq("chainage", chainage);
 
@@ -45,5 +45,26 @@ export async function GET(request: NextRequest) {
     signOffBy: data?.sign_off_by ?? null,
     signOffAt: data?.sign_off_at ?? null,
     signatureStrokes: data?.signature_strokes ?? null,
+    layersRequired: data?.layers_required ?? 3,
+    completedAt: data?.completed_at ?? null,
+    layers: data
+      ? {
+          l1_150: data.l1_150,
+          l1_450: data.l1_450,
+          l1_750: data.l1_750,
+          l2_150: data.l2_150,
+          l2_450: data.l2_450,
+          l2_750: data.l2_750,
+          l3_150: data.l3_150,
+          l3_450: data.l3_450,
+          l3_750: data.l3_750,
+          l4_150: data.l4_150,
+          l4_450: data.l4_450,
+          l4_750: data.l4_750,
+          l5_150: data.l5_150,
+          l5_450: data.l5_450,
+          l5_750: data.l5_750,
+        }
+      : null,
   });
 }

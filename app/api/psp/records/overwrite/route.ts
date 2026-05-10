@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CHAINAGE_STEP } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
-
-const layerKeys = [
-  "l1_150",
-  "l1_450",
-  "l1_750",
-  "l2_150",
-  "l2_450",
-  "l2_750",
-  "l3_150",
-  "l3_450",
-  "l3_750",
-] as const;
+import {
+  getLayerFieldKeysForLayerCount,
+  getLayersRequired,
+  isRecordComplete,
+  resolveDepthRangesForScope,
+  PSP_RECORD_DB_LAYER_COUNT,
+} from "@/lib/psp-depth";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -25,6 +20,7 @@ export async function POST(request: NextRequest) {
     subsectionId,
     sectionId,
     compactorSn,
+    layerCount: layerCountBody,
   } = body;
 
   const chainageNumber = Number(chainage);
@@ -51,10 +47,49 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const layerPayload: Record<string, number> = {};
-  for (const key of layerKeys) {
-    const value = Number(layers?.[key]);
-    if (Number.isNaN(value) || value < 0 || value > 35) {
+  const supabase = getSupabaseServer({ useServiceRole: true });
+  const { data: sectionRow } = await supabase
+    .from("sections")
+    .select("app_config")
+    .eq("id", unified!)
+    .maybeSingle();
+
+  const subTrim =
+    subsectionId != null && String(subsectionId).trim()
+      ? String(subsectionId).trim()
+      : null;
+  let subsectionAppConfig: unknown = null;
+  if (unified && subTrim) {
+    const { data: subRow } = await supabase
+      .from("subsections")
+      .select("section_id,app_config")
+      .eq("id", subTrim)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (subRow?.section_id === unified) {
+      subsectionAppConfig = subRow.app_config;
+    }
+  }
+
+  const depthRanges = resolveDepthRangesForScope(
+    sectionRow?.app_config,
+    subsectionAppConfig,
+  );
+  const lcNum = Number(layerCountBody);
+  const layersRequired =
+    Number.isFinite(lcNum) && lcNum >= 1
+      ? Math.floor(lcNum)
+      : getLayersRequired(chainageNumber, depthRanges);
+  const allLayerKeys = getLayerFieldKeysForLayerCount(
+    PSP_RECORD_DB_LAYER_COUNT,
+  );
+
+  const layerPayload: Record<string, number | null> = {};
+  for (const key of allLayerKeys) {
+    const raw = layers?.[key];
+    if (raw === "" || raw === null || raw === undefined) continue;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 35) {
       return NextResponse.json(
         { error: `Layer ${key} must be between 0 and 35` },
         { status: 400 },
@@ -63,11 +98,9 @@ export async function POST(request: NextRequest) {
     layerPayload[key] = value;
   }
 
-  const supabase = getSupabaseServer({ useServiceRole: true });
-
   let find = supabase
     .from("psp_records")
-    .select("id")
+    .select("*")
     .eq("chainage", chainageNumber);
 
   if (hasLocation) {
@@ -105,6 +138,15 @@ export async function POST(request: NextRequest) {
       ? String(subsectionId).trim()
       : null;
 
+  const mergedRecord = {
+    ...(existing as Record<string, unknown>),
+    ...layerPayload,
+    layers_required: layersRequired,
+  };
+  const completedAt = isRecordComplete(mergedRecord, layersRequired)
+    ? new Date().toISOString()
+    : null;
+
   const { error } = await supabase
     .from("psp_records")
     .update({
@@ -112,7 +154,9 @@ export async function POST(request: NextRequest) {
       subsection_id: sub,
       site_inspector: siteInspector,
       compactor_sn: compactorSnValue || null,
-      modified_at: new Date().toISOString(),
+      layers_required: layersRequired,
+      updated_at: new Date().toISOString(),
+      completed_at: completedAt,
       ...layerPayload,
     })
     .eq("id", existing.id);

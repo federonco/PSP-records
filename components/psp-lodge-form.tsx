@@ -12,6 +12,7 @@
  } from "@/components/signature-pad";
  import { useToast } from "@/components/toast";
  import { CHAINAGE_STEP } from "@/lib/psp";
+import { getLayerFieldKeysForLayerCount } from "@/lib/psp-depth";
 import {
   getEffectiveLocationFields,
   LOCATION_LIST_SELECT,
@@ -42,7 +43,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+
+function liftMmLabel(layerIndex0: number, liftIndex0: number): string {
+  const start = 150 + layerIndex0 * 900 + liftIndex0 * 300;
+  const end = start + 300;
+  return `${start}-${end}mm`;
+}
+
+function maxLayerIndexFromLayers(obj: Record<string, unknown> | null): number {
+  let m = 0;
+  if (!obj) return m;
+  for (const k of Object.keys(obj)) {
+    const match = /^l(\d+)_/.exec(k);
+    if (match) m = Math.max(m, Number(match[1]));
+  }
+  return m;
+}
 
  type LocationRow = {
     id: string;
@@ -76,20 +93,6 @@ import { Loader2 } from "lucide-react";
 
  type PenetrometerOption = { id: string; serial_text: string; sort_order: number };
 type SupervisorOption = { id: string; name: string; company: string | null };
-
- const layerFields = [
-   { key: "l1_150", label: "150-450mm" },
-   { key: "l1_450", label: "450-750mm" },
-   { key: "l1_750", label: "750-1050mm" },
-   { key: "l2_150", label: "150-450mm" },
-   { key: "l2_450", label: "450-750mm" },
-   { key: "l2_750", label: "750-1050mm" },
-   { key: "l3_150", label: "150-450mm" },
-   { key: "l3_450", label: "450-750mm" },
-   { key: "l3_750", label: "750-1050mm" },
- ] as const;
-
- type LayerKey = (typeof layerFields)[number]["key"];
 
 export type PspLodgeLockedEntry = {
   /** Legacy PSP site row; optional when entering via unified QR only. */
@@ -131,12 +134,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const [signatureStrokes, setSignatureStrokes] =
      useState<SignatureStrokes | null>(null);
    const [siteInspector, setSiteInspector] = useState("");
-   const [layers, setLayers] = useState<Record<LayerKey, string>>(() =>
-     Object.fromEntries(layerFields.map((field) => [field.key, ""])) as Record<
-       LayerKey,
-       string
-     >,
-   );
+  const [layerCount, setLayerCount] = useState(3);
+  const [layers, setLayers] = useState<Record<string, string>>({});
    const [loading, setLoading] = useState(false);
   const [penetrometerOptions, setPenetrometerOptions] = useState<PenetrometerOption[]>([]);
   const [penetrometerAddOpen, setPenetrometerAddOpen] = useState(false);
@@ -148,6 +147,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [supervisorOptions, setSupervisorOptions] = useState<SupervisorOption[]>([]);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
+  const [lockedLayerKeys, setLockedLayerKeys] = useState<string[]>([]);
 
   const selectedSection = useMemo(
     () => sections.find((s) => s.id === selectedSectionId) ?? null,
@@ -161,6 +161,10 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       null
     );
   }, [selectedSection, selectedSubsectionId]);
+  const currentLayerKeys = useMemo(
+    () => getLayerFieldKeysForLayerCount(layerCount),
+    [layerCount],
+  );
 
   const locationId = useMemo(
     () =>
@@ -395,6 +399,31 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         setSignOffBy(payload.signOffBy ?? null);
         setSignOffAt(payload.signOffAt ?? null);
         setSignatureStrokes(payload.signatureStrokes ?? null);
+        const incoming = payload.layers as Record<string, number | null> | null;
+        const storedLc = Number(payload.layersRequired);
+        const storedOk = Number.isFinite(storedLc) && storedLc >= 1;
+        const fromKeys = maxLayerIndexFromLayers(incoming);
+        const nextCount = Math.max(3, storedOk ? storedLc : 0, fromKeys);
+        setLayerCount(nextCount);
+        if (incoming) {
+          setLayers((prev) => {
+            const next = { ...prev };
+            for (const [key, value] of Object.entries(incoming)) {
+              if (value !== null && value !== undefined) {
+                next[key] = String(value);
+              }
+            }
+            return next;
+          });
+          const requiredKeys = getLayerFieldKeysForLayerCount(nextCount);
+          setLockedLayerKeys(
+            requiredKeys.filter(
+              (key) => incoming[key] !== null && incoming[key] !== undefined,
+            ),
+          );
+        } else {
+          setLockedLayerKeys([]);
+        }
       } catch (error) {
         pushToast({
           type: "error",
@@ -418,8 +447,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     if (!Number.isFinite(chainage)) return;
     setChainageDisplay(chainage.toFixed(2));
   }, [chainage]);
-
-   const updateLayerValue = (key: LayerKey, value: string) => {
+   const updateLayerValue = (key: string, value: string) => {
      setLayers((prev) => ({ ...prev, [key]: value }));
    };
 
@@ -433,11 +461,54 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      unifiedSectionId &&
      chainage > 0 &&
      siteInspector &&
-     layerFields.every((field) => {
-       const value = layers[field.key];
-       const num = Number(value);
-      return value !== "" && !Number.isNaN(num) && num >= 0 && num <= 35;
+    currentLayerKeys.every((key) => {
+      const value = layers[key];
+      if (value === "" || value === undefined) return true;
+      const num = Number(value);
+      return !Number.isNaN(num) && num >= 0 && num <= 35;
      });
+  const completedCount = currentLayerKeys.filter(
+    (key) => (layers[key] ?? "") !== "",
+  ).length;
+  const isComplete = completedCount === currentLayerKeys.length;
+
+  const addLayer = () => {
+    if (layerCount >= 5) {
+      pushToast({
+        type: "info",
+        title: "Layer limit",
+        message:
+          "Maximum 5 layers supported. Contact admin if more are required.",
+      });
+      return;
+    }
+    setLayerCount((c) => c + 1);
+  };
+
+  const removeLayer = (layerNum1: number) => {
+    if (layerNum1 < 4 || layerNum1 > layerCount) return;
+    setLayers((prev) => {
+      const next = { ...prev };
+      for (let L = layerNum1; L < layerCount; L += 1) {
+        for (const suf of ["150", "450", "750"] as const) {
+          next[`l${L}_${suf}`] = next[`l${L + 1}_${suf}`] ?? "";
+        }
+      }
+      for (const suf of ["150", "450", "750"] as const) {
+        delete next[`l${layerCount}_${suf}`];
+      }
+      return next;
+    });
+    setLayerCount((c) => c - 1);
+  };
+
+  const buildLayersPayload = () =>
+    Object.fromEntries(
+      currentLayerKeys.map((key) => [
+        key,
+        (layers[key] ?? "") === "" ? null : layers[key],
+      ]),
+    );
 
   const handleAdjustChainage = (step: number) => {
     setChainage((prev) => Math.max(0, prev + step));
@@ -477,7 +548,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          subsectionId: subsectionIdForApi,
          chainage,
          siteInspector,
-         layers,
+        layerCount,
+        layers: buildLayersPayload(),
          compactorSn: (() => {
            const eff = getEffectiveLocationFields(activeLocation ?? undefined);
            return eff.compactor_serial != null
@@ -529,12 +601,9 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         });
       }
     }
-     setLayers(
-       Object.fromEntries(layerFields.map((field) => [field.key, ""])) as Record<
-         LayerKey,
-         string
-       >,
-     );
+     setLayerCount(3);
+     setLayers({});
+    setLockedLayerKeys([]);
      setSignatureStrokes(null);
      pushToast({ type: "success", title: "Record lodged" });
      setDuplicate(false);
@@ -580,7 +649,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          subsectionId: subsectionIdForApi,
          chainage,
          siteInspector,
-         layers,
+        layerCount,
+        layers: buildLayersPayload(),
          compactorSn: (() => {
            const eff = getEffectiveLocationFields(activeLocation ?? undefined);
            return eff.compactor_serial != null
@@ -796,6 +866,11 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         <Card className="psp-card">
           <CardHeader className="pb-2 gap-y-[14px]">
             <CardTitle className="psp-section-label">Layers</CardTitle>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {duplicate
+                ? `Incomplete — ${completedCount} of ${currentLayerKeys.length} fields`
+                : `${layerCount} layer block(s)`}
+            </p>
             <div className="grid gap-3">
               <div className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted-foreground)]">
@@ -917,53 +992,81 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                   </DropdownMenu>
                 </div>
               </div>
-              {[0, 1, 2].map((layerIndex) => (
+              {Array.from({ length: layerCount }, (_, idx) => idx).map((layerIndex) => {
+                const layerNum = layerIndex + 1;
+                return (
                 <div
                   key={`layer-${layerIndex}`}
                   className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
                 >
-                  <div className="mb-2 text-xs font-semibold text-[var(--muted-foreground)]">
-                    <span>Layer {layerIndex + 1} - Number of blows</span>
+                  <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-[var(--muted-foreground)]">
+                    <span>Layer {layerNum} - Number of blows</span>
+                    {layerNum >= 4 ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-8 shrink-0 text-[var(--muted-foreground)]"
+                        onClick={() => removeLayer(layerNum)}
+                        aria-label={`Remove layer ${layerNum}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    ) : null}
                   </div>
                   <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
-                    {layerFields
-                      .slice(layerIndex * 3, layerIndex * 3 + 3)
-                      .map((field) => {
-                        const value = layers[field.key];
-                        const warning = layerOutOfRange(value);
-                        return (
-                          <div
-                            key={field.key}
-                            className="grid min-w-0 content-start gap-1"
-                          >
-                            <label className="psp-label truncate">
-                              {field.label}
-                            </label>
-                            <Input
-                              type="number"
-                              min={0}
-                              max={35}
-                              value={value}
-                              onChange={(event) =>
-                                updateLayerValue(field.key, event.target.value)
-                              }
-                              className={`psp-layer-input ${
-                                warning
-                                  ? "border border-[var(--danger)] bg-[color:var(--danger)/0.08]"
-                                  : ""
-                              }`}
-                            />
-                            {warning ? (
-                              <p className="text-xs text-[var(--danger)]">
-                                Out of Tolerance
-                              </p>
-                            ) : null}
-                          </div>
-                        );
-                      })}
+                    {([0, 1, 2] as const).map((liftIdx) => {
+                      const key = `l${layerNum}_${
+                        liftIdx === 0 ? "150" : liftIdx === 1 ? "450" : "750"
+                      }`;
+                      const value = layers[key] ?? "";
+                      const warning = layerOutOfRange(value);
+                      const isLocked = lockedLayerKeys.includes(key);
+                      return (
+                        <div
+                          key={key}
+                          className="grid min-w-0 content-start gap-1"
+                        >
+                          <label className="psp-label truncate">
+                            {liftMmLabel(layerIndex, liftIdx)}
+                          </label>
+                          <Input
+                            type="number"
+                            min={0}
+                            max={35}
+                            value={value}
+                            onChange={(event) =>
+                              updateLayerValue(key, event.target.value)
+                            }
+                            disabled={isLocked}
+                            className={`psp-layer-input ${
+                              warning
+                                ? "border border-[var(--danger)] bg-[color:var(--danger)/0.08]"
+                                : ""
+                            }`}
+                          />
+                          {warning ? (
+                            <p className="text-xs text-[var(--danger)]">
+                              Out of Tolerance
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-              ))}
+                );
+              })}
+              <div className="pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-dashed"
+                  onClick={addLayer}
+                >
+                  + Add Layer
+                </Button>
+              </div>
             </div>
           </CardHeader>
         </Card>
@@ -1033,7 +1136,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         <div className="pt-0">
           <ConfirmButton
             variant="ghost"
-            label={loading ? "Lodging..." : "Lodge record"}
+            label={loading ? "Saving..." : isComplete ? "Lodge Record" : "Save Progress"}
             confirmLabel="CONFIRM?"
             onConfirm={handleLodge}
             disabled={!canSubmit || loading || duplicate}

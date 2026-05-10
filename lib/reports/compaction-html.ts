@@ -34,23 +34,78 @@ function getLogoBase64(): string {
 }
 
 function padRecords(records: CompactionRecord[], count: number): CompactionRecord[] {
+  const empty: CompactionRecord = {
+    date: "",
+    date_initial: "",
+    date_updated: "",
+    record_status: "",
+    layers_required: 3,
+    ch: "",
+    l1_a: "",
+    l1_b: "",
+    l1_c: "",
+    l2_a: "",
+    l2_b: "",
+    l2_c: "",
+    l3_a: "",
+    l3_b: "",
+    l3_c: "",
+    l4_a: "",
+    l4_b: "",
+    l4_c: "",
+    l5_a: "",
+    l5_b: "",
+    l5_c: "",
+  };
   const out = [...(records ?? [])];
   while (out.length < count) {
-    out.push({
-      date: "",
-      ch: "",
-      l1_a: "",
-      l1_b: "",
-      l1_c: "",
-      l2_a: "",
-      l2_b: "",
-      l2_c: "",
-      l3_a: "",
-      l3_b: "",
-      l3_c: "",
-    });
+    out.push({ ...empty });
   }
   return out.slice(0, count);
+}
+
+function liftMmRangeLabel(layerIndexZero: number, liftIndexZero: number): string {
+  const start = 150 + layerIndexZero * 900 + liftIndexZero * 300;
+  const end = start + 300;
+  return `${start}-${end}mm`;
+}
+
+function layerLiftKeys(layerNum: number): [
+  keyof CompactionRecord,
+  keyof CompactionRecord,
+  keyof CompactionRecord,
+] {
+  const suf = ["a", "b", "c"] as const;
+  return [`l${layerNum}_${suf[0]}`, `l${layerNum}_${suf[1]}`, `l${layerNum}_${suf[2]}`] as [
+    keyof CompactionRecord,
+    keyof CompactionRecord,
+    keyof CompactionRecord,
+  ];
+}
+
+function layerHasAnyLiftValue(rec: CompactionRecord, layerNum: number): boolean {
+  return layerLiftKeys(layerNum).some((k) => {
+    const v = rec[k];
+    return v !== null && v !== undefined && String(v) !== "";
+  });
+}
+
+function layersRequiredClamp(rec: CompactionRecord): number {
+  const n = rec.layers_required ?? 3;
+  const num = Number(n);
+  return Math.min(Math.max(Number.isFinite(num) ? num : 3, 1), 5);
+}
+
+function computeLayersToShow(padded: CompactionRecord[]): number[] {
+  const maxExpected = Math.max(1, ...padded.map(layersRequiredClamp));
+  const out: number[] = [];
+  for (let L = 1; L <= maxExpected; L += 1) {
+    const include = padded.some(
+      (r) => L <= layersRequiredClamp(r) && layerHasAnyLiftValue(r, L),
+    );
+    if (include) out.push(L);
+  }
+  return out;
 }
 
 export function renderCompactionHTML(data: CompactionTemplateData): string {
@@ -114,7 +169,7 @@ export function renderCompactionHTML(data: CompactionTemplateData): string {
   <td style="border:0.5pt solid #000;padding:0"></td>
 </tr>
 <tr>
-  <td style="${detailLabel}">DATE OF TEST:</td>
+  <td style="${detailLabel};white-space:nowrap">DATE OF REPORT:</td>
   <td style="${detailValue}">${escapeHtml(reportDate)}</td>
   <td style="${detailLabel};white-space:nowrap">PENETROMETER ID:</td>
   <td style="${detailValue}">${escapeHtml(penetrometerSn)}</td>
@@ -149,18 +204,48 @@ export function renderCompactionHTML(data: CompactionTemplateData): string {
     const dataCellStyle = "font-size:7pt;padding:5px 2px;border:0.5pt solid #000;vertical-align:middle;line-height:1.1;background:#FFF;text-align:center";
     const depthLabel = "font-size:7pt;padding:5px 2px;border:0.5pt solid #000;vertical-align:middle;background:#FFF;line-height:1.1";
 
-    const layerRows = (n: 1 | 2 | 3) => {
-      const la: keyof CompactionRecord = n === 1 ? "l1_a" : n === 2 ? "l2_a" : "l3_a";
-      const lb: keyof CompactionRecord = n === 1 ? "l1_b" : n === 2 ? "l2_b" : "l3_b";
-      const lc: keyof CompactionRecord = n === 1 ? "l1_c" : n === 2 ? "l2_c" : "l3_c";
-      return `
-<tr><td style="${layerHeader}">Layer – ${n}</td>${Array.from({ length: 10 }, () => chainageCell).join("")}</tr>
-<tr><td style="background:${greyBg};border:0.5pt solid #000;padding:1px 2px"></td>${padded.map((r) => `<td style="${dateCellStyle}">${escapeHtml(norm(r.date))}</td>`).join("")}</tr>
-<tr><td style="background:${greyBg};border:0.5pt solid #000;padding:1px 2px"></td>${padded.map((r) => `<td style="${chCellStyle}">${escapeHtml(norm(r.ch))}</td>`).join("")}</tr>
-<tr><td style="${depthLabel}">150-450mm</td>${padded.map((r) => `<td style="${dataCellStyle}">${escapeHtml(norm(r[la]))}</td>`).join("")}</tr>
-<tr><td style="${depthLabel}">450-750mm</td>${padded.map((r) => `<td style="${dataCellStyle}">${escapeHtml(norm(r[lb]))}</td>`).join("")}</tr>
-<tr><td style="${depthLabel}">750-1050mm</td>${padded.map((r) => `<td style="${dataCellStyle}">${escapeHtml(norm(r[lc]))}</td>`).join("")}</tr>`;
-    };
+    const recordMetaLabel = detailLabel;
+
+    const layersToShow = computeLayersToShow(padded);
+
+    const recordMetaRows = `
+<tr><td style="${recordMetaLabel}">Date (Initial)</td>${padded
+      .map((r) => `<td style="${dateCellStyle}">${escapeHtml(norm(r.date_initial ?? r.date ?? ""))}</td>`)
+      .join("")}</tr>
+<tr><td style="${recordMetaLabel}">Date (Last Updated)</td>${padded
+      .map((r) =>
+        `<td style="${dateCellStyle}">${escapeHtml(norm(r.date_updated ?? r.date_initial ?? r.date ?? ""))}</td>`,
+      )
+      .join("")}</tr>
+<tr><td style="${recordMetaLabel}">Record status</td>${padded
+      .map((r) => `<td style="${dateCellStyle}">${escapeHtml(norm(r.record_status ?? ""))}</td>`)
+      .join("")}</tr>
+<tr><td style="${recordMetaLabel}">Chainage</td>${padded
+      .map((r) => `<td style="${chCellStyle}">${escapeHtml(norm(r.ch))}</td>`)
+      .join("")}</tr>`;
+
+    let dynamicLayerRows = "";
+    for (const layerNum of layersToShow) {
+      const layerIndex0 = layerNum - 1;
+      const keys = layerLiftKeys(layerNum);
+      dynamicLayerRows += `
+<tr><td style="${layerHeader}">Layer – ${layerNum}</td>${Array.from({ length: 10 }, () => chainageCell).join("")}</tr>`;
+      for (let liftIdx = 0; liftIdx < 3; liftIdx += 1) {
+        const label = liftMmRangeLabel(layerIndex0, liftIdx);
+        const key = keys[liftIdx];
+        dynamicLayerRows += `
+<tr><td style="${depthLabel}">${escapeHtml(label)}</td>${padded
+          .map((r) => {
+            if (layerNum > layersRequiredClamp(r)) {
+              return `<td style="${dataCellStyle}"></td>`;
+            }
+            const v = r[key];
+            const present = v !== null && v !== undefined && String(v) !== "";
+            return `<td style="${dataCellStyle}">${escapeHtml(present ? norm(v) : "")}</td>`;
+          })
+          .join("")}</tr>`;
+      }
+    }
 
     const footerLabel = "background:#E2EAF3;color:#000;font-weight:bold;font-size:7pt;padding:3px 4px;border:0.5pt solid #000;vertical-align:middle;line-height:1.1";
 
@@ -180,7 +265,7 @@ export function renderCompactionHTML(data: CompactionTemplateData): string {
 </colgroup>
 <tbody>
 <tr><td colspan="11" style="${sectionBar}">PERTH SAND PENETROMETER RECORD</td></tr>
-${layerRows(1)}${layerRows(2)}${layerRows(3)}
+${recordMetaRows}${dynamicLayerRows}
 <tr><td colspan="11" style="${sectionBar}">COMMENTS AND CONFORMANCE</td></tr>
 <tr><td style="${footerLabel}" colspan="1">Comments:</td><td colspan="10" style="padding:2px 4px;border:0.5pt solid #000;background:#FFF;vertical-align:middle"><div style="display:block;width:100%;height:32px;box-sizing:border-box;"></div></td></tr>
 <tr><td colspan="3" style="${footerLabel}">AREA-SUBLOT CONFORMS: Yes/No</td><td colspan="2" style="padding:2px 4px;border:0.5pt solid #000;background:#FFF;vertical-align:middle"><div style="display:block;width:100%;height:26px;box-sizing:border-box;"></div></td><td colspan="3" style="${footerLabel}">DATE REVIEWED:</td><td colspan="3" style="padding:2px 4px;border:0.5pt solid #000;background:#FFF;vertical-align:middle"><div style="display:block;width:100%;height:26px;box-sizing:border-box;"></div></td></tr>
