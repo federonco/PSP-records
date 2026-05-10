@@ -19,7 +19,6 @@ import {
   mergeLocationAppConfig,
 } from "@/lib/location-app-config";
  import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
- import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
  import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -127,7 +126,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [chainageDisplay, setChainageDisplay] = useState("0.00");
   const [chainageLoading, setChainageLoading] = useState(false);
    const [checking, setChecking] = useState(false);
-   const [duplicate, setDuplicate] = useState(false);
    const [recordId, setRecordId] = useState<string | null>(null);
    const [signOffBy, setSignOffBy] = useState<string | null>(null);
    const [signOffAt, setSignOffAt] = useState<string | null>(null);
@@ -150,7 +148,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     const s = supervisorOptions.find((x) => x.id === inspectorSupervisorId);
     return (s?.name ?? "").trim();
   }, [supervisorOptions, inspectorSupervisorId]);
-  const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
   const selectedSection = useMemo(
     () => sections.find((s) => s.id === selectedSectionId) ?? null,
@@ -404,7 +401,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         const payload = await response.json();
-        setDuplicate(Boolean(payload.exists));
         setRecordId(payload.recordId ?? null);
         setSignOffBy(payload.signOffBy ?? null);
         setSignOffAt(payload.signOffAt ?? null);
@@ -429,7 +425,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       } catch (error) {
         pushToast({
           type: "error",
-          title: "Duplicate check failed",
+          title: "Check failed",
           message: error instanceof Error ? error.message : "Unknown error",
         });
       } finally {
@@ -469,11 +465,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       const num = Number(value);
       return !Number.isNaN(num) && num >= 0 && num <= 35;
      });
-  const completedCount = currentLayerKeys.filter(
-    (key) => (layers[key] ?? "") !== "",
-  ).length;
-  const isComplete = completedCount === currentLayerKeys.length;
-
   const addLayer = () => {
     if (layerCount >= 5) {
       pushToast({
@@ -608,7 +599,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      setInspectorSupervisorId("");
      setSignatureStrokes(null);
      pushToast({ type: "success", title: "Record lodged" });
-     setDuplicate(false);
      setRecordId(null);
     const nextToken = await getBrowserAccessToken();
     const usp = new URLSearchParams({ unifiedSectionId });
@@ -628,51 +618,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      if (nextResponse.ok) {
        setChainage(nextPayload.chainage);
      }
-   };
-
-   const handleOverwrite = async () => {
-     if (!canSubmit || !duplicate) return;
-     setLoading(true);
-    const token = await getBrowserAccessToken();
-     const response = await fetch("/api/psp/records/overwrite", {
-       method: "POST",
-       headers: {
-         "Content-Type": "application/json",
-         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-       },
-       body: JSON.stringify({
-         ...(locationId?.trim()
-           ? { locationId: locationId.trim() }
-           : {}),
-         ...(locationName?.trim()
-           ? { locationName: locationName.trim() }
-           : {}),
-         unifiedSectionId,
-         subsectionId: subsectionIdForApi,
-         chainage,
-         siteInspector,
-        layerCount,
-        layers: buildLayersPayload(),
-         compactorSn: (() => {
-           const eff = getEffectiveLocationFields(activeLocation ?? undefined);
-           return eff.compactor_serial != null
-             ? String(eff.compactor_serial)
-             : (eff.penetrometer_sn ?? "#3059-0325");
-         })(),
-       }),
-     });
-     const payload = await response.json();
-     setLoading(false);
-     if (!response.ok) {
-       pushToast({
-         type: "error",
-         title: "Overwrite failed",
-         message: payload.error ?? "Unable to overwrite record",
-       });
-       return;
-     }
-     pushToast({ type: "success", title: "Record overwritten" });
-    setOverwriteOpen(false);
    };
 
    const handleSaveSignature = async (payload: SignatureStrokes) => {
@@ -856,23 +801,11 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
 
         </div>
 
-        {duplicate ? (
-          <Alert className="border-[var(--warning)] bg-[color:var(--warning)/0.08] text-[var(--warning)]">
-            <AlertTitle>Record exists at this chainage</AlertTitle>
-            <AlertDescription>
-              You can edit any layer and use Save Progress to update. Use
-              Proceed to overwrite only if you need the legacy overwrite flow.
-            </AlertDescription>
-          </Alert>
-        ) : null}
-
         <Card className="psp-card">
           <CardHeader className="pb-2 gap-y-[14px]">
             <CardTitle className="psp-section-label">Layers</CardTitle>
             <p className="text-xs text-[var(--muted-foreground)]">
-              {duplicate
-                ? `Incomplete — ${completedCount} of ${currentLayerKeys.length} fields`
-                : `${layerCount} layer block(s)`}
+              {layerCount} layer block(s)
             </p>
             <div className="grid gap-3">
               <div className="rounded-[20px] bg-[var(--surface)] p-4 shadow-[0_1px_4px_rgba(0,0,0,0.06)]">
@@ -1140,7 +1073,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         <div className="pt-0">
           <ConfirmButton
             variant="ghost"
-            label={loading ? "Saving..." : isComplete ? "Lodge Record" : "Save Progress"}
+            label="Lodge Record"
             confirmLabel="CONFIRM?"
             onConfirm={handleLodge}
             disabled={!canSubmit || loading}
@@ -1151,18 +1084,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             }}
             confirmClassName="psp-button-warning"
           />
-          {duplicate ? (
-            <div className="pt-3">
-              <Button
-                className="w-full shrink-0 min-h-11 rounded-full border border-[#F5C7CB] bg-[#FCEBEC] px-4 py-1 font-[500] text-[#B4232C] shadow-none hover:bg-[#FCEBEC]/80 hover:text-[#B4232C] active:bg-[#FCEBEC]/70 font-[family-name:var(--font-display)]"
-                style={{ fontFamily: "Manrope, var(--font-display), sans-serif" }}
-                onClick={() => setOverwriteOpen(true)}
-                disabled={!canSubmit}
-              >
-                Proceed to overwrite
-              </Button>
-            </div>
-          ) : null}
         </div>
       </div>
 
@@ -1172,29 +1093,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             <DialogTitle>Admin sign-in</DialogTitle>
           </DialogHeader>
           <AuthPanel onAuthChange={setAuthEmail} />
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={overwriteOpen} onOpenChange={setOverwriteOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirm overwrite</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            This will overwrite the existing record at chainage {chainage}. This
-            action requires admin access and cannot be undone.
-          </p>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setOverwriteOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={handleOverwrite}>
-              Confirm overwrite
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
