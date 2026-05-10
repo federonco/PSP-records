@@ -152,8 +152,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [supervisorOptions, inspectorSupervisorId]);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
-  const [lockedLayerKeys, setLockedLayerKeys] = useState<string[]>([]);
-
   const selectedSection = useMemo(
     () => sections.find((s) => s.id === selectedSectionId) ?? null,
     [sections, selectedSectionId],
@@ -427,14 +425,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             }
             return next;
           });
-          const requiredKeys = getLayerFieldKeysForLayerCount(nextCount);
-          setLockedLayerKeys(
-            requiredKeys.filter(
-              (key) => incoming[key] !== null && incoming[key] !== undefined,
-            ),
-          );
-        } else {
-          setLockedLayerKeys([]);
         }
       } catch (error) {
         pushToast({
@@ -540,7 +530,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
    const handleLodge = async () => {
-     if (!canSubmit || duplicate) return;
+     if (!canSubmit) return;
      setLoading(true);
     const token = await getBrowserAccessToken();
      const response = await fetch("/api/psp/records", {
@@ -615,7 +605,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     }
      setLayerCount(3);
      setLayers({});
-    setLockedLayerKeys([]);
      setInspectorSupervisorId("");
      setSignatureStrokes(null);
      pushToast({ type: "success", title: "Record lodged" });
@@ -869,9 +858,10 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
 
         {duplicate ? (
           <Alert className="border-[var(--warning)] bg-[color:var(--warning)/0.08] text-[var(--warning)]">
-            <AlertTitle>Already recorded</AlertTitle>
+            <AlertTitle>Record exists at this chainage</AlertTitle>
             <AlertDescription>
-              This chainage already exists. Overwrite requires confirmation.
+              You can edit any layer and use Save Progress to update. Use
+              Proceed to overwrite only if you need the legacy overwrite flow.
             </AlertDescription>
           </Alert>
         ) : null}
@@ -1034,7 +1024,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                       }`;
                       const value = layers[key] ?? "";
                       const warning = layerOutOfRange(value);
-                      const isLocked = lockedLayerKeys.includes(key);
                       return (
                         <div
                           key={key}
@@ -1051,7 +1040,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                             onChange={(event) =>
                               updateLayerValue(key, event.target.value)
                             }
-                            disabled={isLocked}
                             className={`psp-layer-input ${
                               warning
                                 ? "border border-[var(--danger)] bg-[color:var(--danger)/0.08]"
@@ -1155,7 +1143,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             label={loading ? "Saving..." : isComplete ? "Lodge Record" : "Save Progress"}
             confirmLabel="CONFIRM?"
             onConfirm={handleLodge}
-            disabled={!canSubmit || loading || duplicate}
+            disabled={!canSubmit || loading}
             className="psp-button psp-button-lodge w-full shrink-0 min-h-11 text-white"
             style={{
               backgroundColor: "var(--psp-lodge-bg)",
