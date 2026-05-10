@@ -1,17 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnSiteBAdmin } from "@/lib/admin";
-import { createRouteHandlerSupabase } from "@/lib/supabase/route-handler";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
+/** Public read for lodge form: operators may not be signed in; scope is section/subsection UUID from QR. */
 export async function GET(request: NextRequest) {
-  const supabase = await createRouteHandlerSupabase();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const { searchParams } = new URL(request.url);
   const sectionId = searchParams.get("section_id")?.trim() || null;
   const subsectionId = searchParams.get("subsection_id")?.trim() || null;
@@ -34,10 +26,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  type SupRow = { id: string; name: string; company: string | null };
   const supervisors = (data ?? [])
-    .map((row: any) => row.psp_supervisors)
-    .filter(Boolean)
-    .sort((a: any, b: any) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
+    .map((row: { psp_supervisors: SupRow | SupRow[] | null }) => {
+      const rel = row.psp_supervisors;
+      return Array.isArray(rel) ? rel[0] ?? null : rel;
+    })
+    .filter((s): s is SupRow => Boolean(s?.id))
+    .sort((a, b) => String(a.name ?? "").localeCompare(String(b.name ?? "")));
 
   return NextResponse.json({ supervisors });
 }

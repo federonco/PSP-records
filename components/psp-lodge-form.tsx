@@ -133,7 +133,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const [signOffAt, setSignOffAt] = useState<string | null>(null);
    const [signatureStrokes, setSignatureStrokes] =
      useState<SignatureStrokes | null>(null);
-   const [siteInspector, setSiteInspector] = useState("");
+  /** Supervisor row id for Select (unique); name is derived for API payloads. */
+  const [inspectorSupervisorId, setInspectorSupervisorId] = useState("");
   const [layerCount, setLayerCount] = useState(3);
   const [layers, setLayers] = useState<Record<string, string>>({});
    const [loading, setLoading] = useState(false);
@@ -145,6 +146,10 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [penetrometerEditInput, setPenetrometerEditInput] = useState("#3059-0325");
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [supervisorOptions, setSupervisorOptions] = useState<SupervisorOption[]>([]);
+  const siteInspector = useMemo(() => {
+    const s = supervisorOptions.find((x) => x.id === inspectorSupervisorId);
+    return (s?.name ?? "").trim();
+  }, [supervisorOptions, inspectorSupervisorId]);
   const [overwriteOpen, setOverwriteOpen] = useState(false);
   const [adminAuthOpen, setAdminAuthOpen] = useState(false);
   const [lockedLayerKeys, setLockedLayerKeys] = useState<string[]>([]);
@@ -330,6 +335,13 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     };
     void loadSupervisors();
   }, [selectedSubsectionId, unifiedSectionId]);
+
+  useEffect(() => {
+    if (!inspectorSupervisorId) return;
+    if (!supervisorOptions.some((s) => s.id === inspectorSupervisorId)) {
+      setInspectorSupervisorId("");
+    }
+  }, [supervisorOptions, inspectorSupervisorId]);
 
   useEffect(() => {
     if (!unifiedSectionId) {
@@ -604,6 +616,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
      setLayerCount(3);
      setLayers({});
     setLockedLayerKeys([]);
+     setInspectorSupervisorId("");
      setSignatureStrokes(null);
      pushToast({ type: "success", title: "Record lodged" });
      setDuplicate(false);
@@ -1074,16 +1087,19 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         <div className="psp-outer">
           <div className="psp-section-label">Signature</div>
 
-          <Select value={siteInspector} onValueChange={setSiteInspector}>
+          <Select
+            value={inspectorSupervisorId || undefined}
+            onValueChange={setInspectorSupervisorId}
+          >
             <SelectTrigger
               className={`psp-input mt-[14px] mb-[2px] w-full bg-[var(--inner-bg)] ${siteInspector ? "psp-select-inspector-filled" : ""}`}
             >
               <SelectValue placeholder="Select inspector" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent position="popper" sideOffset={4} className="z-[100]">
               {supervisorOptions.length ? (
                 supervisorOptions.map((supervisor) => (
-                  <SelectItem key={supervisor.id} value={supervisor.name}>
+                  <SelectItem key={supervisor.id} value={supervisor.id}>
                     {supervisor.name}
                   </SelectItem>
                 ))
