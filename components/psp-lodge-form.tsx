@@ -1006,16 +1006,16 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         </Card>
 
         <div className="psp-outer">
-          <div className="psp-section-label">Signature</div>
+          <div className="psp-section-label">Supervisor</div>
 
           <Select
             value={inspectorSupervisorId || undefined}
             onValueChange={setInspectorSupervisorId}
           >
             <SelectTrigger
-              className={`psp-input mt-[14px] mb-[2px] w-full bg-[var(--inner-bg)] ${siteInspector ? "psp-select-inspector-filled" : ""}`}
+              className={`psp-input mt-[14px] mb-[2px] w-full bg-[var(--inner-bg)] ${siteInspector ? "psp-select-supervisor-filled" : ""}`}
             >
-              <SelectValue placeholder="Select inspector" />
+              <SelectValue placeholder="Select supervisor" />
             </SelectTrigger>
             <SelectContent position="popper" sideOffset={4} className="z-[100]">
               {supervisorOptions.length ? (
@@ -1031,6 +1031,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               )}
             </SelectContent>
           </Select>
+
+          <div className="psp-section-label mt-[14px]">Signature</div>
 
           <div className="mt-[14px] w-full space-y-2">
             <div className="rounded-[12px] bg-[var(--inner-bg)] min-h-[180px] overflow-hidden relative flex flex-col">

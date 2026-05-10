@@ -310,10 +310,10 @@ body {
     border-color: var(--color-border-soft) !important;
     box-shadow: 0 0 0 3px var(--ring-soft) !important;
   }
-  /* Inspector select: borde y ring #D3DAE1 (también al enfocar) cuando hay inspector seleccionado */
-  button.psp-select-inspector-filled,
-  button.psp-select-inspector-filled:focus,
-  button.psp-select-inspector-filled:focus-visible {
+  /* Supervisor select: borde y ring #D3DAE1 (también al enfocar) cuando hay supervisor seleccionado */
+  button.psp-select-supervisor-filled,
+  button.psp-select-supervisor-filled:focus,
+  button.psp-select-supervisor-filled:focus-visible {
     border-color: var(--color-border-soft) !important;
     box-shadow: 0 0 0 3px var(--ring-soft) !important;
   }
