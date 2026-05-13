@@ -52,12 +52,13 @@ type Location = {
   app_config?: Record<string, unknown> | null;
 };
  type RecordRow = {
-  location_id: string;
-   chainage: number;
+  id?: string;
+  location_id: string | null;
+  chainage: number;
   sign_off_at?: string | null;
   unified_section_id?: string | null;
   subsection_id?: string | null;
- };
+};
 
 type UnifiedSubsectionRow = {
   id: string;
@@ -130,6 +131,16 @@ function isDottedSectionName(name: string): boolean {
   return /^\s*section\s+\d+\.\d+\b/i.test(name);
 }
 
+/** In-memory `recordsByLocation` bucket for null `location_id`; must never be used as a real `location_id` in queries or sync. */
+const NO_LOCATION_BUCKET_KEY = "__no_location__";
+
+function safeLocationIdsForQuery(ids: string[]): string[] {
+  return ids.filter(
+    (id) =>
+      Boolean(id) && id !== NO_LOCATION_BUCKET_KEY && id.length === 36,
+  );
+}
+
 type CompactionReportRow = {
   id: string;
   status: "READY" | "OPEN" | string;
@@ -165,20 +176,66 @@ function buildCompactionSummary(reports: CompactionReportRow[]) {
   return { ready, open, pending };
 }
 
-function getLocationRequirementFor(loc: Location | undefined): number | null {
-  if (!loc) return null;
-  const eff = getEffectiveLocationFields(loc);
-  if (
-    eff.quality_reports_required !== null &&
-    eff.quality_reports_required !== undefined
-  ) {
-    return eff.quality_reports_required;
+function itrRequirementFromSectionAppConfig(
+  app: Record<string, unknown> | null | undefined,
+): number | null {
+  if (!app || typeof app !== "object" || Array.isArray(app)) return null;
+  const steps = app.steps;
+  if (typeof steps === "number" && Number.isFinite(steps)) return steps;
+  if (typeof steps === "string" && steps.trim()) {
+    const n = Number(steps.trim());
+    if (Number.isFinite(n)) return n;
   }
-  const start = loc.start_chainage;
-  const end = loc.end_chainage;
-  if (typeof start === "number" && typeof end === "number") {
-    const length = Math.abs(end - start);
-    return Math.ceil(length / 200);
+  const listRaw = app.chainage_list_json;
+  if (Array.isArray(listRaw) && listRaw.length > 0) return listRaw.length;
+  if (typeof listRaw === "string" && listRaw.trim()) {
+    try {
+      const parsed = JSON.parse(listRaw) as unknown;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed.length;
+    } catch {
+      /* ignore invalid JSON */
+    }
+  }
+  const lenM = app.length_m;
+  if (typeof lenM === "number" && Number.isFinite(lenM) && lenM > 0) {
+    return Math.max(1, Math.ceil(lenM / 200));
+  }
+  if (typeof lenM === "string" && lenM.trim()) {
+    const n = Number(lenM.trim());
+    if (Number.isFinite(n) && n > 0) return Math.max(1, Math.ceil(n / 200));
+  }
+  return null;
+}
+
+function getLocationRequirementFor(
+  loc: Location | undefined,
+  sectionAppConfig?: Record<string, unknown> | null,
+  sectionRow?: Pick<UnifiedSectionRow, "start_ch" | "end_ch"> | null,
+): number | null {
+  if (loc) {
+    const eff = getEffectiveLocationFields(loc);
+    if (
+      eff.quality_reports_required !== null &&
+      eff.quality_reports_required !== undefined
+    ) {
+      return eff.quality_reports_required;
+    }
+    const start = loc.start_chainage;
+    const end = loc.end_chainage;
+    if (typeof start === "number" && typeof end === "number") {
+      const length = Math.abs(end - start);
+      return Math.ceil(length / 200);
+    }
+  }
+  const fromSection = itrRequirementFromSectionAppConfig(sectionAppConfig ?? undefined);
+  if (fromSection !== null) return fromSection;
+  if (
+    sectionRow &&
+    typeof sectionRow.start_ch === "number" &&
+    typeof sectionRow.end_ch === "number"
+  ) {
+    const span = Math.abs(sectionRow.end_ch - sectionRow.start_ch);
+    if (span > 0) return Math.ceil(span / 200);
   }
   return null;
 }
@@ -360,6 +417,14 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     [locations],
   );
 
+  const unifiedSectionIdsKey = useMemo(
+    () =>
+      [...new Set(unifiedSections.map((s) => s.id).filter(Boolean))].sort().join(
+        ",",
+      ),
+    [unifiedSections],
+  );
+
   const normalizedSections = useMemo(() => {
     const cloned = unifiedSections.map((section) => ({
       ...section,
@@ -454,7 +519,14 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    setUnifiedSections((payload.sections ?? []) as UnifiedSectionRow[]);
+    const secs = (payload.sections ?? []) as UnifiedSectionRow[];
+    setUnifiedSections(secs);
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        "[DEBUG sections]",
+        secs.map((s) => ({ id: s.id, name: s.name })),
+      );
+    }
   };
 
   const loadSupervisors = async () => {
@@ -545,19 +617,41 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
 
   const loadCompactionReports = async () => {
     if (!authEmail) return;
-    const ids = [...new Set(locations.map((l) => l.id))].filter(Boolean);
-    if (!ids.length) {
+    const safeIds = safeLocationIdsForQuery(
+      [...new Set(locations.map((l) => l.id))].filter(Boolean),
+    );
+    const sectionIds = unifiedSectionIdsKey.split(",").filter(Boolean);
+    if (!safeIds.length && !sectionIds.length) {
       setCompactionReports([]);
       return;
     }
-    const { data, error } = await supabase
-      .from("psp_reports")
-      .select(
-        "id,status,block_key,block_index,pending_chainages,pdf_path,location_id,unified_section_id,subsection_id",
-      )
-      .in("location_id", ids)
-      .eq("report_type", "compaction")
-      .order("block_index", { ascending: true });
+    const selectCols =
+      "id,status,block_key,block_index,pending_chainages,pdf_path,location_id,unified_section_id,subsection_id";
+    const byLocPromise = safeIds.length
+      ? supabase
+          .from("psp_reports")
+          .select(selectCols)
+          .in("location_id", safeIds)
+          .eq("report_type", "compaction")
+          .order("block_index", { ascending: true })
+      : Promise.resolve({
+          data: [] as Record<string, unknown>[],
+          error: null as null,
+        });
+    const bySecPromise = sectionIds.length
+      ? supabase
+          .from("psp_reports")
+          .select(selectCols)
+          .in("unified_section_id", sectionIds)
+          .eq("report_type", "compaction")
+          .order("block_index", { ascending: true })
+      : Promise.resolve({
+          data: [] as Record<string, unknown>[],
+          error: null as null,
+        });
+    const [{ data: dataByLoc, error: errLoc }, { data: dataBySec, error: errSec }] =
+      await Promise.all([byLocPromise, bySecPromise]);
+    const error = errLoc ?? errSec;
     if (error) {
       pushToast({
         type: "error",
@@ -566,7 +660,16 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    const reports = (data ?? []) as CompactionReportRow[];
+    const mergedById = new Map<string, CompactionReportRow>();
+    for (const row of [...(dataByLoc ?? []), ...(dataBySec ?? [])]) {
+      const r = row as CompactionReportRow & { id?: string };
+      const k =
+        typeof r.id === "string" && r.id.trim()
+          ? r.id.trim()
+          : `${r.block_key ?? ""}|${r.unified_section_id ?? ""}|${r.subsection_id ?? ""}`;
+      if (!mergedById.has(k)) mergedById.set(k, r);
+    }
+    const reports = [...mergedById.values()];
     const dedupedReports = reports.filter(
       (report, index, self) =>
         index ===
@@ -581,14 +684,42 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   };
 
   useEffect(() => {
-    if (!authEmail || !locationIdsKey) return;
+    if (!authEmail) return;
     const ids = locationIdsKey.split(",").filter(Boolean);
+    const safeLocIds = safeLocationIdsForQuery(ids);
+    const sectionIds = unifiedSectionIdsKey.split(",").filter(Boolean);
+    if (!safeLocIds.length && !sectionIds.length) {
+      setRecordsByLocation({});
+      return;
+    }
     const loadRecords = async () => {
-      const { data, error } = await supabase
-        .from("psp_records")
-        .select("location_id,chainage,sign_off_at,unified_section_id,subsection_id")
-        .in("location_id", ids)
-        .order("chainage", { ascending: false });
+      const byLocPromise = safeLocIds.length
+        ? supabase
+            .from("psp_records")
+            .select(
+              "id,location_id,chainage,sign_off_at,unified_section_id,subsection_id",
+            )
+            .in("location_id", safeLocIds)
+            .order("chainage", { ascending: false })
+        : Promise.resolve({
+            data: [] as Record<string, unknown>[],
+            error: null as null,
+          });
+      const bySecPromise = sectionIds.length
+        ? supabase
+            .from("psp_records")
+            .select(
+              "id,location_id,chainage,sign_off_at,unified_section_id,subsection_id",
+            )
+            .in("unified_section_id", sectionIds)
+            .order("chainage", { ascending: false })
+        : Promise.resolve({
+            data: [] as Record<string, unknown>[],
+            error: null as null,
+          });
+      const [{ data: dataByLoc, error: errLoc }, { data: dataBySec, error: errSec }] =
+        await Promise.all([byLocPromise, bySecPromise]);
+      const error = errLoc ?? errSec;
       if (error) {
         pushToast({
           type: "error",
@@ -597,24 +728,57 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         });
         return;
       }
+      const data = [...(dataByLoc ?? []), ...(dataBySec ?? [])];
+      if (process.env.NODE_ENV === "development") {
+        console.log("[DEBUG psp_records]", {
+          fetchedCount: data.length,
+          locationIdsUsed: safeLocIds,
+          unifiedSectionIdsUsed: sectionIds,
+          sampleRecord: data[0],
+          nullLocationIdCount: data.filter((r) => {
+            const lid = (r as { location_id?: string | null }).location_id;
+            return lid == null || (typeof lid === "string" && !lid.trim());
+          }).length,
+        });
+      }
+      const mergedById = new Map<string, RecordRow>();
+      for (const row of data) {
+        const rec = row as RecordRow & { id?: string };
+        const dedupeKey =
+          typeof rec.id === "string" && rec.id.trim()
+            ? rec.id
+            : `${rec.unified_section_id ?? ""}|${rec.subsection_id ?? ""}|${rec.chainage}`;
+        if (!mergedById.has(dedupeKey)) mergedById.set(dedupeKey, rec);
+      }
       const grouped: Record<string, RecordRow[]> = {};
-      ids.forEach((id) => {
+      for (const id of safeLocIds) {
         grouped[id] = [];
-      });
-      for (const row of data ?? []) {
-        const lid = row.location_id as string;
-        if (!grouped[lid]) grouped[lid] = [];
-        grouped[lid].push(row as RecordRow);
+      }
+      const bucketFor = (lid: string | null | undefined) => {
+        if (typeof lid === "string" && lid.trim()) return lid.trim();
+        return NO_LOCATION_BUCKET_KEY;
+      };
+      for (const row of mergedById.values()) {
+        const key = bucketFor(row.location_id);
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(row);
       }
       setRecordsByLocation(grouped);
     };
-    loadRecords();
-  }, [authEmail, locationIdsKey, pushToast, supabase]);
+    void loadRecords();
+  }, [
+    authEmail,
+    locationIdsKey,
+    unifiedSectionIdsKey,
+    pushToast,
+    supabase,
+  ]);
 
   useEffect(() => {
-    if (!authEmail || !locationIdsKey) return;
+    if (!authEmail) return;
+    if (!locationIdsKey && !unifiedSectionIdsKey) return;
     void loadCompactionReports();
-  }, [authEmail, locationIdsKey]);
+  }, [authEmail, locationIdsKey, unifiedSectionIdsKey]);
 
   const syncCompactionReports = async (args: {
     locationId: string;
@@ -622,9 +786,18 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     sectionId?: string | null;
     subsectionId?: string | null;
   }) => {
-    const { locationId, locationName, sectionId, subsectionId } = args;
-    if (!locationId || !authEmail) return;
-    setSyncingLocationId(locationId);
+    const { locationName, sectionId, subsectionId } = args;
+    const safeLocationId =
+      args.locationId &&
+      args.locationId !== NO_LOCATION_BUCKET_KEY &&
+      args.locationId.length === 36
+        ? args.locationId
+        : null;
+    const sec = sectionId?.trim() || null;
+    const sub = subsectionId?.trim() || null;
+    if (!authEmail) return;
+    if (!safeLocationId && !sec && !sub) return;
+    setSyncingLocationId(safeLocationId ?? sec ?? sub ?? "");
     const token = await getBrowserAccessToken();
     if (!token) {
       setSyncingLocationId(null);
@@ -642,13 +815,14 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
-        locationId,
+        locationId: safeLocationId,
         locationName,
-        sectionId: sectionId ?? null,
-        subsectionId: subsectionId ?? null,
+        sectionId: sec,
+        subsectionId: sub,
       }),
     });
     const payload = await response.json();
+    console.log("[DEBUG SYNC RESPONSE]", JSON.stringify(payload, null, 2));
     setSyncingLocationId(null);
     if (!response.ok) {
       pushToast({
@@ -1894,6 +2068,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       };
     }
     for (const lid of Object.keys(recordsByLocation)) {
+      if (lid === NO_LOCATION_BUCKET_KEY) continue;
       const rows = recordsByLocation[lid] ?? [];
       if (
         rows.some(
@@ -1909,6 +2084,21 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
           subsectionId: null,
         };
       }
+    }
+    // If direct records for this section exist but only under __no_location__,
+    // don't fall through to location-based guesses — return with null id
+    const hasNullLocationRecords = (
+      recordsByLocation[NO_LOCATION_BUCKET_KEY] ?? []
+    ).some(
+      (r) => r.unified_section_id === section.id && !r.subsection_id,
+    );
+    if (hasNullLocationRecords) {
+      return {
+        id: NO_LOCATION_BUCKET_KEY,
+        name: section.name,
+        sectionId: section.id,
+        subsectionId: null,
+      };
     }
     for (const loc of locations) {
       const raw = loc.app_config;
@@ -1946,12 +2136,17 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     sectionId: string;
     subsectionId: string;
   } | null => {
+    const fromRow =
+      typeof sub.location_id === "string" && sub.location_id.trim()
+        ? sub.location_id.trim()
+        : null;
     const fromCfg = locationIdFromSubAppConfig(sub.app_config);
-    if (fromCfg) {
-      const loc = locations.find((l) => l.id === fromCfg);
+    const linkedLocationId = fromRow ?? fromCfg;
+    if (linkedLocationId) {
+      const loc = locations.find((l) => l.id === linkedLocationId);
       return {
-        id: fromCfg,
-        name: loc?.name ?? fromCfg,
+        id: linkedLocationId,
+        name: loc?.name ?? linkedLocationId,
         sectionId,
         subsectionId: sub.id,
       };
@@ -1968,6 +2163,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     }
     // Fallback: infer location from loaded records for this subsection.
     for (const lid of Object.keys(recordsByLocation)) {
+      if (lid === NO_LOCATION_BUCKET_KEY) continue;
       const rows = recordsByLocation[lid] ?? [];
       if (rows.some((r) => r.subsection_id === sub.id)) {
         const loc = locations.find((l) => l.id === lid);
@@ -1978,6 +2174,17 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
           subsectionId: sub.id,
         };
       }
+    }
+    const hasNullLocationSubRecords = (
+      recordsByLocation[NO_LOCATION_BUCKET_KEY] ?? []
+    ).some((r) => r.subsection_id === sub.id);
+    if (hasNullLocationSubRecords) {
+      return {
+        id: NO_LOCATION_BUCKET_KEY,
+        name: sub.name,
+        sectionId,
+        subsectionId: sub.id,
+      };
     }
     const firstLocation = locations[0];
     if (firstLocation) {
@@ -1997,6 +2204,9 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     variant: "section" | "subsection";
     reports: CompactionReportRow[];
     locRecords: RecordRow[];
+    sectionAppConfigForItr?: Record<string, unknown> | null;
+    sectionRowForItr?: Pick<UnifiedSectionRow, "start_ch" | "end_ch"> | null;
+    subsectionChainageForItr?: { start: number; end: number } | null;
     syncTarget: {
       id: string;
       name: string;
@@ -2010,6 +2220,9 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       variant,
       reports: scopeReports,
       locRecords,
+      sectionAppConfigForItr,
+      sectionRowForItr,
+      subsectionChainageForItr,
       syncTarget,
     } = args;
 
@@ -2017,7 +2230,24 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     const locForRequirement = syncTarget
       ? locations.find((l) => l.id === syncTarget.id)
       : undefined;
-    const locationRequirement = getLocationRequirementFor(locForRequirement);
+    let locationRequirement = getLocationRequirementFor(
+      locForRequirement,
+      sectionAppConfigForItr,
+      sectionRowForItr,
+    );
+    if (
+      locationRequirement === null &&
+      subsectionChainageForItr &&
+      typeof subsectionChainageForItr.start === "number" &&
+      typeof subsectionChainageForItr.end === "number"
+    ) {
+      const length = Math.abs(
+        subsectionChainageForItr.end - subsectionChainageForItr.start,
+      );
+      if (length > 0) {
+        locationRequirement = Math.ceil(length / 200);
+      }
+    }
     const progressSummary = getProgressSummary(
       locRecords,
       locForRequirement,
@@ -2050,7 +2280,18 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         : "text-lg font-bold tracking-tight text-[var(--ink)]";
     })();
 
-    const syncId = syncTarget?.id;
+    const syncId = (() => {
+      if (!syncTarget) return null;
+      const raw = syncTarget.id;
+      if (
+        raw &&
+        raw !== NO_LOCATION_BUCKET_KEY &&
+        raw.length === 36
+      ) {
+        return raw;
+      }
+      return syncTarget.subsectionId ?? syncTarget.sectionId ?? null;
+    })();
     const syncing = syncId != null && syncingLocationId === syncId;
 
     return (
@@ -2497,6 +2738,9 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                     variant: "section",
                     reports: sectionScopeReports,
                     locRecords: sectionScopeRecords,
+                    sectionAppConfigForItr: section.app_config,
+                    sectionRowForItr: section,
+                    subsectionChainageForItr: null,
                     syncTarget: sectionSyncTarget,
                   })}
                   {(section.subsections ?? []).map((sub) => {
@@ -2583,6 +2827,20 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                           variant: "subsection",
                           reports: subScopeReports,
                           locRecords: subScopeRecords,
+                          sectionAppConfigForItr: {
+                            ...section.app_config,
+                            ...(sub.app_config &&
+                            typeof sub.app_config === "object" &&
+                            !Array.isArray(sub.app_config)
+                              ? sub.app_config
+                              : {}),
+                          },
+                          sectionRowForItr: section,
+                          subsectionChainageForItr:
+                            typeof sub.start_ch === "number" &&
+                            typeof sub.end_ch === "number"
+                              ? { start: sub.start_ch, end: sub.end_ch }
+                              : null,
                           syncTarget: subSyncTarget,
                         })}
                       </div>

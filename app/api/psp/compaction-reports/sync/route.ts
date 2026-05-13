@@ -77,28 +77,34 @@ export async function POST(request: NextRequest) {
   const { user } = gate;
 
   const body = await request.json();
-  const locationId = body?.locationId as string | undefined;
+  const locationId = (body?.locationId as string | null | undefined)?.trim() || undefined;
   const locationName = body?.locationName as string | undefined;
   const sectionId = body?.sectionId as string | undefined;
   const subsectionId = body?.subsectionId as string | undefined;
 
-  if (!locationId) {
-    return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
+  console.log("[SYNC] inputs:", { locationId, sectionId, subsectionId, locationName });
+
+  if (!locationId && !sectionId && !subsectionId) {
+    return NextResponse.json(
+      { error: "Missing locationId, sectionId, or subsectionId" },
+      { status: 400 },
+    );
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
 
-  const { data: locationRow } = locationName
-    ? { data: null }
-    : await supabase
-        .from("locations")
-        .select("name,app_config")
-        .eq("location_type", "psp")
-        .eq("id", locationId)
-        .maybeSingle();
+  const { data: locationRow } =
+    !locationId || locationName
+      ? { data: null }
+      : await supabase
+          .from("locations")
+          .select("name,app_config")
+          .eq("location_type", "psp")
+          .eq("id", locationId)
+          .maybeSingle();
 
   const resolvedLocationName =
-    locationName ?? locationRow?.name ?? locationId;
+    locationName ?? locationRow?.name ?? locationId ?? sectionId ?? "location";
 
   let unified_section_id: string | null = null;
   let subsection_id: string | null = null;
@@ -131,7 +137,11 @@ export async function POST(request: NextRequest) {
 
     const cfg = subsectionRow.app_config as Record<string, unknown> | null | undefined;
     const cfgLocationId = cfg?.location_id;
-    if (typeof cfgLocationId === "string" && cfgLocationId !== locationId) {
+    if (
+      typeof cfgLocationId === "string" &&
+      locationId &&
+      cfgLocationId !== locationId
+    ) {
       console.warn("compaction sync location mismatch", {
         locationId,
         cfgLocationId,
@@ -144,7 +154,7 @@ export async function POST(request: NextRequest) {
   } else {
     if (sectionId) {
       unified_section_id = sectionId;
-    } else {
+    } else if (locationId) {
       const { data: sampleRec } = await supabase
         .from("psp_records")
         .select("unified_section_id")
@@ -165,6 +175,8 @@ export async function POST(request: NextRequest) {
           .maybeSingle();
         unified_section_id = (sharedSec?.id as string) ?? null;
       }
+    } else {
+      unified_section_id = null;
     }
     subsection_id = null;
   }
@@ -178,24 +190,39 @@ export async function POST(request: NextRequest) {
     report_type: "compaction",
   });
 
-  let recordsQuery = supabase
-    .from("psp_records")
-    .select(
-      "recorded_at,chainage,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,site_inspector",
-    )
-    .eq("location_id", locationId);
+  let recordsQuery = supabase.from("psp_records").select(
+    "recorded_at,chainage,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,site_inspector",
+  );
 
-  if (subsectionId) {
-    recordsQuery = recordsQuery.eq("subsection_id", subsectionId);
+  if (locationId) {
+    recordsQuery = recordsQuery.eq("location_id", locationId);
+    if (subsectionId) {
+      recordsQuery = recordsQuery.eq("subsection_id", subsectionId);
+    } else if (sectionId) {
+      recordsQuery = recordsQuery
+        .eq("unified_section_id", sectionId)
+        .is("subsection_id", null);
+    }
+  } else if (subsectionId && unified_section_id) {
+    recordsQuery = recordsQuery
+      .eq("unified_section_id", unified_section_id)
+      .eq("subsection_id", subsectionId);
   } else if (sectionId) {
     recordsQuery = recordsQuery
       .eq("unified_section_id", sectionId)
       .is("subsection_id", null);
+  } else {
+    return NextResponse.json(
+      { error: "Cannot resolve record scope without locationId or sectionId" },
+      { status: 400 },
+    );
   }
 
   const { data: records, error } = await recordsQuery.order("chainage", {
     ascending: false,
   });
+
+  console.log("[SYNC] records fetched:", records?.length ?? 0, "error:", error?.message);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -203,6 +230,13 @@ export async function POST(request: NextRequest) {
 
   const recordList = (records ?? []) as RecordRow[];
   const blocks = computeBlocks(recordList.map((row) => row.chainage));
+
+  console.log(
+    "[SYNC] blocks computed:",
+    blocks.length,
+    "from chainages:",
+    recordList.map((r) => r.chainage),
+  );
 
   const { data: existingReports } = await supabase
     .from("psp_reports")
@@ -235,15 +269,15 @@ export async function POST(request: NextRequest) {
   for (const block of blocks) {
     const existing = reportMap.get(block.blockKey);
     const basePayload = {
-      location_id: locationId,
+      location_id: locationId ?? null,
       unified_section_id: sectionId ?? unified_section_id,
       subsection_id,
       report_type: "compaction",
       block_key: block.blockKey,
       status: block.status,
       pending_chainages: block.pending,
-      start_chainage: block.start,
-      end_chainage: block.end,
+      start_chainage: Math.round(block.start),
+      end_chainage: Math.round(block.end),
       block_index: block.index,
       record_count: block.recordCount,
       created_by: user.id,

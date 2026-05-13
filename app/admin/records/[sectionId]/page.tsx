@@ -100,6 +100,7 @@ export default function RecordsPage() {
           .from("psp_records")
           .select(baseSelect)
           .eq("unified_section_id", sectionId)
+          .is("subsection_id", null)
           .order("chainage", { ascending: false });
         const { data, error } = await query;
         console.log("[view-records] result count:", data?.length);
@@ -151,6 +152,7 @@ export default function RecordsPage() {
               .from("psp_records")
               .select(baseSelect)
               .eq("location_id", fallbackLocationId)
+              .is("subsection_id", null)
               .order("chainage", { ascending: false });
             loadedRows = (data ?? []) as RecordRow[];
           }
