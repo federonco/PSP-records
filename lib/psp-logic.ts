@@ -127,28 +127,30 @@ export function validateSaveData(
   return { ok: true as const, clean };
 }
 
+/** @param chainages Lodge order: most recent first (`recorded_at` DESC). */
 export function getNextChainageFromSet(
   chainages: number[],
   direction: "backwards" | "onwards" = "backwards",
   startChainage?: number | null,
-) {
+): number {
   const numeric = chainages.filter((value) => Number.isFinite(value));
-  const base =
-    typeof startChainage === "number"
-      ? startChainage
-      : numeric.length
-        ? Math.floor(Math.max(...numeric) / CHAINAGE_STEP) * CHAINAGE_STEP
-        : START_CHAINAGE;
-  const set = new Set(numeric);
+
+  // Sin registros: arrancar desde start_ch
+  if (numeric.length === 0) {
+    return typeof startChainage === "number" ? startChainage : START_CHAINAGE;
+  }
+
+  // Con registros: último lodgeado ± step
+  const lastLodged = numeric[0];
   const step = direction === "onwards" ? CHAINAGE_STEP : -CHAINAGE_STEP;
-  let nextCh = base;
-  if (set.has(nextCh)) {
-    nextCh += step;
+  const existing = new Set(numeric);
+
+  let next = lastLodged + step;
+  while (existing.has(next)) {
+    next += step;
   }
-  while (set.has(nextCh)) {
-    nextCh += step;
-  }
-  return nextCh;
+
+  return next;
 }
 
 export function getHistoricalBlocksFromChainages(chainages: number[]) {

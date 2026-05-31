@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
   }
 
   const { data, error } = await q
-    .order("chainage", { ascending: false })
+    .order("recorded_at", { ascending: false, nullsFirst: false })
     .limit(5000);
 
   if (error) {
