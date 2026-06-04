@@ -1,4 +1,5 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
+import { CHAINAGE_STEP } from "@/lib/psp";
 import { getHistoricalBlocksFromChainages } from "@/lib/psp-logic";
 import type { CompactionTemplateData } from "@/lib/reporting/compaction";
 import { renderCompactionHTML } from "@/lib/reports/compaction-html";
@@ -118,50 +119,102 @@ export async function generateCompactionPdfFromHTML(data: CompactionTemplateData
   };
 }
 
-export async function generateITRExb003Pdf(params: {
-  locationId: string;
-  locationName: string;
-  reportNum: number;
-  includeOpen: boolean;
-  penetrometerSn: string | null;
+const RECORD_SELECT =
+  "recorded_at,updated_at,completed_at,chainage,layers_required,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,l4_150,l4_450,l4_750,l5_150,l5_450,l5_750,site_inspector";
+
+type PspRecordRow = {
+  recorded_at: string | null;
+  updated_at: string | null;
+  completed_at: string | null;
+  chainage: number;
+  layers_required: number | null;
+  l1_150: number | null;
+  l1_450: number | null;
+  l1_750: number | null;
+  l2_150: number | null;
+  l2_450: number | null;
+  l2_750: number | null;
+  l3_150: number | null;
+  l3_450: number | null;
+  l3_750: number | null;
+  l4_150: number | null;
+  l4_450: number | null;
+  l4_750: number | null;
+  l5_150: number | null;
+  l5_450: number | null;
+  l5_750: number | null;
+  site_inspector: string | null;
+};
+
+export function chainagesFromBlockKey(blockKey: string): number[] {
+  const parts = blockKey.split("-");
+  if (parts.length < 2) {
+    throw new Error("Invalid block key");
+  }
+  const max = Number(parts[0]);
+  const start = Number(parts[1]);
+  if (!Number.isFinite(max) || !Number.isFinite(start)) {
+    throw new Error("Invalid block key");
+  }
+  const chainages: number[] = [];
+  for (let value = max; value >= start; value -= CHAINAGE_STEP) {
+    chainages.push(value);
+  }
+  return chainages;
+}
+
+function buildCompactionBlockInfo(params: {
+  expected: number[];
+  blockIndex?: number | null;
+  pendingChainages?: number[] | null;
+  reportStatus?: string | null;
+  records: PspRecordRow[];
 }) {
-  const supabase = getSupabaseServer({ useServiceRole: true });
-  const { locationId, locationName, reportNum, includeOpen, penetrometerSn } = params;
+  const recordMap = new Map<number, PspRecordRow>();
+  params.records.forEach((record) => {
+    recordMap.set(record.chainage, record);
+  });
+  const pending =
+    params.pendingChainages ??
+    params.expected.filter((chainage) => {
+      const record = recordMap.get(chainage);
+      return !record?.completed_at;
+    });
+  const status =
+    params.reportStatus === "OPEN" || pending.length > 0 ? "OPEN" : "READY";
+  return {
+    index: params.blockIndex ?? 0,
+    expected: params.expected,
+    status: status as "OPEN" | "READY",
+    pending,
+    recordMap,
+  };
+}
 
-  const { data: chainageRows, error: chainageError } = await supabase
-    .from("psp_records")
-    .select("chainage")
-    .eq("location_id", locationId);
-  if (chainageError) throw new Error(chainageError.message);
-
-  const chainages = (chainageRows ?? [])
-    .map((row) => row.chainage)
-    .filter((value) => Number.isFinite(value));
-  const blocks = getHistoricalBlocksFromChainages(chainages);
-  const block = blocks.find((item) => item.index === reportNum);
-  if (!block) throw new Error("Report block not found");
-  if (block.status === "OPEN" && !includeOpen) {
+async function buildITRExb003PdfFromRecords(params: {
+  locationName: string;
+  penetrometerSn: string | null;
+  expected: number[];
+  blockIndex?: number | null;
+  pendingChainages?: number[] | null;
+  reportStatus?: string | null;
+  includeOpen: boolean;
+  records: PspRecordRow[];
+}) {
+  const block = buildCompactionBlockInfo({
+    expected: params.expected,
+    blockIndex: params.blockIndex,
+    pendingChainages: params.pendingChainages,
+    reportStatus: params.reportStatus,
+    records: params.records,
+  });
+  if (block.status === "OPEN" && !params.includeOpen) {
     throw new Error("Report is open and includeOpen=false");
   }
 
-  const { data: records, error: recordsError } = await supabase
-    .from("psp_records")
-    .select(
-      "recorded_at,updated_at,completed_at,chainage,layers_required,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,l4_150,l4_450,l4_750,l5_150,l5_450,l5_750,site_inspector",
-    )
-    .eq("location_id", locationId)
-    .in("chainage", block.expected)
-    .order("chainage", { ascending: false });
-  if (recordsError) throw new Error(recordsError.message);
-
-  const recordMap = new Map<number, (typeof records)[number]>();
-  (records ?? []).forEach((record) => {
-    recordMap.set(record.chainage, record);
-  });
-
   const reportDate = formatDatePerth(new Date().toISOString());
   const recordsPayload = block.expected.map((chainage) => {
-    const record = recordMap.get(chainage);
+    const record = block.recordMap.get(chainage);
     const recordedAt = record?.recorded_at ?? null;
     const updatedAt = record?.updated_at ?? recordedAt;
     const initialFmt = recordedAt ? formatDatePerth(recordedAt) : "";
@@ -198,7 +251,7 @@ export async function generateITRExb003Pdf(params: {
 
   let supervisorName = "";
   for (let idx = block.expected.length - 1; idx >= 0; idx -= 1) {
-    const record = recordMap.get(block.expected[idx]);
+    const record = block.recordMap.get(block.expected[idx]);
     if (record?.site_inspector) {
       supervisorName = record.site_inspector;
       break;
@@ -208,11 +261,122 @@ export async function generateITRExb003Pdf(params: {
   const templateData: CompactionTemplateData = {
     REPORT_DATE: reportDate,
     SUPERVISOR_NAME: supervisorName,
-    WORK_LOCATION: locationName,
-    PENETROMETER_SN: penetrometerSn ?? "",
+    WORK_LOCATION: params.locationName,
+    PENETROMETER_SN: params.penetrometerSn ?? "",
     records: recordsPayload,
   };
 
   const result = await generateCompactionPdfFromHTML(templateData);
-  return { buffer: result.buffer, block };
+  return {
+    buffer: result.buffer,
+    block: {
+      index: block.index,
+      expected: block.expected,
+      status: block.status,
+      pending: block.pending,
+    },
+  };
+}
+
+async function fetchScopedCompactionRecords(params: {
+  expected: number[];
+  unifiedSectionId?: string | null;
+  subsectionId?: string | null;
+  locationId?: string | null;
+}) {
+  const supabase = getSupabaseServer({ useServiceRole: true });
+  let recordsQuery = supabase
+    .from("psp_records")
+    .select(RECORD_SELECT)
+    .in("chainage", params.expected);
+
+  if (params.unifiedSectionId) {
+    recordsQuery = recordsQuery.eq("unified_section_id", params.unifiedSectionId);
+    if (params.subsectionId) {
+      recordsQuery = recordsQuery.eq("subsection_id", params.subsectionId);
+    } else {
+      recordsQuery = recordsQuery.is("subsection_id", null);
+    }
+  } else if (params.locationId) {
+    recordsQuery = recordsQuery.eq("location_id", params.locationId);
+  } else {
+    throw new Error("Report scope missing unified section or location");
+  }
+
+  const { data: records, error: recordsError } = await recordsQuery.order(
+    "chainage",
+    { ascending: false },
+  );
+  if (recordsError) throw new Error(recordsError.message);
+  return (records ?? []) as PspRecordRow[];
+}
+
+export async function generateITRExb003PdfForCompactionReport(params: {
+  blockKey: string;
+  blockIndex?: number | null;
+  pendingChainages?: number[] | null;
+  reportStatus?: string | null;
+  unifiedSectionId?: string | null;
+  subsectionId?: string | null;
+  locationId?: string | null;
+  locationName: string;
+  includeOpen: boolean;
+  penetrometerSn: string | null;
+}) {
+  const expected = chainagesFromBlockKey(params.blockKey);
+  const records = await fetchScopedCompactionRecords({
+    expected,
+    unifiedSectionId: params.unifiedSectionId,
+    subsectionId: params.subsectionId,
+    locationId: params.locationId,
+  });
+  return buildITRExb003PdfFromRecords({
+    locationName: params.locationName,
+    penetrometerSn: params.penetrometerSn,
+    expected,
+    blockIndex: params.blockIndex,
+    pendingChainages: params.pendingChainages,
+    reportStatus: params.reportStatus,
+    includeOpen: params.includeOpen,
+    records,
+  });
+}
+
+export async function generateITRExb003Pdf(params: {
+  locationId: string;
+  locationName: string;
+  reportNum: number;
+  includeOpen: boolean;
+  penetrometerSn: string | null;
+}) {
+  const supabase = getSupabaseServer({ useServiceRole: true });
+  const { locationId, locationName, reportNum, includeOpen, penetrometerSn } = params;
+
+  const { data: chainageRows, error: chainageError } = await supabase
+    .from("psp_records")
+    .select("chainage")
+    .eq("location_id", locationId);
+  if (chainageError) throw new Error(chainageError.message);
+
+  const chainages = (chainageRows ?? [])
+    .map((row) => row.chainage)
+    .filter((value) => Number.isFinite(value));
+  const blocks = getHistoricalBlocksFromChainages(chainages);
+  const block = blocks.find((item) => item.index === reportNum);
+  if (!block) throw new Error("Report block not found");
+
+  const records = await fetchScopedCompactionRecords({
+    expected: block.expected,
+    locationId,
+  });
+  return buildITRExb003PdfFromRecords({
+    locationName,
+    penetrometerSn,
+    expected: block.expected,
+    blockIndex: block.index,
+    pendingChainages: block.pending,
+    reportStatus: block.status,
+    includeOpen,
+    records,
+  });
 }

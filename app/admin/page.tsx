@@ -148,7 +148,7 @@ type CompactionReportRow = {
   block_index?: number | null;
   pending_chainages?: number[] | null;
   pdf_path?: string | null;
-  location_id: string;
+  location_id: string | null;
   unified_section_id?: string | null;
   subsection_id?: string | null;
 };
@@ -1204,7 +1204,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    if (!sendPdfLocationId && !sendPdfLocationName) {
+    if (!report.id && !sendPdfLocationId && !sendPdfLocationName) {
       pushToast({
         type: "error",
         title: "Send failed",
@@ -1238,8 +1238,9 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
-        location_id: sendPdfLocationId,
-        location_name: sendPdfLocationName,
+        report_id: report.id,
+        location_id: sendPdfLocationId || null,
+        location_name: sendPdfLocationName || null,
         reportNum: report.block_index,
         includeOpen: true,
         recipientEmail: trimmed,
@@ -2463,7 +2464,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                   );
                   const pdfName =
                     locations.find((l) => l.id === report.location_id)?.name ??
-                    report.location_id;
+                    titleText;
 
                   return (
                     <div
@@ -2514,7 +2515,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                         onClick={() =>
                           openSendPdfModal(
                             report,
-                            report.location_id,
+                            report.location_id ?? "",
                             pdfName,
                           )
                         }
