@@ -208,36 +208,15 @@ function itrRequirementFromSectionAppConfig(
 }
 
 function getLocationRequirementFor(
-  loc: Location | undefined,
-  sectionAppConfig?: Record<string, unknown> | null,
+  _loc?: Location | undefined,
+  _sectionAppConfig?: Record<string, unknown> | null,
   sectionRow?: Pick<UnifiedSectionRow, "start_ch" | "end_ch"> | null,
+  subsectionRow?: Pick<UnifiedSubsectionRow, "start_ch" | "end_ch"> | null,
 ): number | null {
-  if (loc) {
-    const eff = getEffectiveLocationFields(loc);
-    if (
-      eff.quality_reports_required !== null &&
-      eff.quality_reports_required !== undefined
-    ) {
-      return eff.quality_reports_required;
-    }
-    const start = loc.start_chainage;
-    const end = loc.end_chainage;
-    if (typeof start === "number" && typeof end === "number") {
-      const length = Math.abs(end - start);
-      return Math.ceil(length / 200);
-    }
-  }
-  const fromSection = itrRequirementFromSectionAppConfig(sectionAppConfig ?? undefined);
-  if (fromSection !== null) return fromSection;
-  if (
-    sectionRow &&
-    typeof sectionRow.start_ch === "number" &&
-    typeof sectionRow.end_ch === "number"
-  ) {
-    const span = Math.abs(sectionRow.end_ch - sectionRow.start_ch);
-    if (span > 0) return Math.ceil(span / 200);
-  }
-  return null;
+  const start = subsectionRow?.start_ch ?? sectionRow?.start_ch;
+  const end = subsectionRow?.end_ch ?? sectionRow?.end_ch;
+  if (typeof start !== "number" || typeof end !== "number") return null;
+  return Math.ceil(Math.abs(end - start) / 200);
 }
 
 function getProgressSummary(
@@ -245,6 +224,7 @@ function getProgressSummary(
   loc: Location | undefined,
   compactionReady: number,
   locationRequirement: number | null,
+  chainageSpan?: { start: number; end: number } | null,
 ) {
   const required = locationRequirement ?? 0;
   const ready = compactionReady;
@@ -253,20 +233,35 @@ function getProgressSummary(
     required > 0 ? Math.min(100, Math.round((ready / required) * 100)) : 0;
 
   let lengthPercent = 0;
-  if (loc) {
-    const start = loc.start_chainage;
-    const end = loc.end_chainage;
-    if (typeof start === "number" && typeof end === "number") {
-      const length = Math.abs(end - start);
-      if (length > 0) {
-        const totalSteps = Math.floor(length / CHAINAGE_STEP) + 1;
-        const uniqueChainages = new Set(records.map((row) => row.chainage));
-        const covered = Math.min(uniqueChainages.size, totalSteps);
-        lengthPercent = Math.min(
-          100,
-          Math.round((covered / totalSteps) * 100),
-        );
-      }
+  let start: number | undefined;
+  let end: number | undefined;
+  if (
+    loc &&
+    typeof loc.start_chainage === "number" &&
+    typeof loc.end_chainage === "number"
+  ) {
+    start = loc.start_chainage;
+    end = loc.end_chainage;
+  }
+  if (
+    (typeof start !== "number" || typeof end !== "number") &&
+    chainageSpan &&
+    typeof chainageSpan.start === "number" &&
+    typeof chainageSpan.end === "number"
+  ) {
+    start = chainageSpan.start;
+    end = chainageSpan.end;
+  }
+  if (typeof start === "number" && typeof end === "number") {
+    const length = Math.abs(end - start);
+    if (length > 0) {
+      const totalSteps = Math.floor(length / CHAINAGE_STEP) + 1;
+      const uniqueChainages = new Set(records.map((row) => row.chainage));
+      const covered = Math.min(uniqueChainages.size, totalSteps);
+      lengthPercent = Math.min(
+        100,
+        Math.round((covered / totalSteps) * 100),
+      );
     }
   }
 
@@ -2235,6 +2230,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       locForRequirement,
       sectionAppConfigForItr,
       sectionRowForItr,
+      subsectionChainageForItr
+        ? {
+            start_ch: subsectionChainageForItr.start,
+            end_ch: subsectionChainageForItr.end,
+          }
+        : null,
     );
     if (
       locationRequirement === null &&
@@ -2254,6 +2255,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       locForRequirement,
       compactionSummary.ready,
       locationRequirement,
+      subsectionChainageForItr ??
+        (sectionRowForItr &&
+        typeof sectionRowForItr.start_ch === "number" &&
+        typeof sectionRowForItr.end_ch === "number"
+          ? { start: sectionRowForItr.start_ch, end: sectionRowForItr.end_ch }
+          : null),
     );
     const siteExpanded = compactionPanelExpanded[scopeKey] ?? false;
     const isSubScope = variant === "subsection";
