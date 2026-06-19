@@ -3,7 +3,10 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { sendEmail, getSenderAddress, buildHtmlBody } from "@/lib/email";
-import { generateITRExb003Pdf, resolvePspLocation } from "@/lib/reporting/itr-exb-003";
+import {
+  generateITRExb003PdfForCompactionReport,
+  resolvePspLocation,
+} from "@/lib/reporting/itr-exb-003";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -59,6 +62,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Section not found" }, { status: 404 });
     }
 
+    let subsectionName: string | null = null;
+    if (subsectionId) {
+      const { data: subsection } = await supabase
+        .from("subsections")
+        .select("name")
+        .eq("id", subsectionId)
+        .maybeSingle();
+      subsectionName = subsection?.name ?? null;
+    }
+
     let reportsQuery = supabase
       .from("psp_reports")
       .select("*")
@@ -80,33 +93,53 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No ready reports found" }, { status: 404 });
     }
 
+    const scopeDisplayName = subsectionName ?? section.name;
     const pdfBuffers: Buffer[] = [];
     const locationCache = new Map<string, { locationName: string; penetrometerSn: string | null }>();
-    for (const report of reports) {
-      const reportNum = Number(report.block_index);
-      const locationId = String(report.location_id ?? "").trim();
-      if (!Number.isFinite(reportNum) || !locationId) continue;
 
-      let locationMeta = locationCache.get(locationId);
-      if (!locationMeta) {
-        const resolvedLocation = await resolvePspLocation(locationId, null);
-        if (!resolvedLocation) continue;
-        locationMeta = {
-          locationName: resolvedLocation.locationName,
-          penetrometerSn: resolvedLocation.penetrometerSn,
-        };
-        locationCache.set(locationId, locationMeta);
+    for (const report of reports) {
+      if (!report.block_key) continue;
+
+      let displayName = scopeDisplayName;
+      let penetrometerSn: string | null = null;
+      const locationId = report.location_id ? String(report.location_id).trim() : "";
+
+      if (locationId) {
+        let locationMeta = locationCache.get(locationId);
+        if (!locationMeta) {
+          const resolvedLocation = await resolvePspLocation(locationId, null);
+          if (resolvedLocation) {
+            locationMeta = {
+              locationName: resolvedLocation.locationName,
+              penetrometerSn: resolvedLocation.penetrometerSn,
+            };
+            locationCache.set(locationId, locationMeta);
+          }
+        }
+        if (locationMeta) {
+          displayName = locationMeta.locationName;
+          penetrometerSn = locationMeta.penetrometerSn;
+        }
       }
 
-      const result = await generateITRExb003Pdf({
-        locationId,
-        locationName: locationMeta.locationName,
-        reportNum,
-        includeOpen: true,
-        penetrometerSn: locationMeta.penetrometerSn,
-      });
-      const buffer = await normalizePdfBuffer(result.buffer ?? result);
-      pdfBuffers.push(buffer);
+      try {
+        const result = await generateITRExb003PdfForCompactionReport({
+          blockKey: report.block_key,
+          blockIndex: report.block_index,
+          pendingChainages: report.pending_chainages,
+          reportStatus: report.status,
+          unifiedSectionId: report.unified_section_id,
+          subsectionId: report.subsection_id,
+          locationId: report.location_id,
+          locationName: displayName,
+          includeOpen: true,
+          penetrometerSn,
+        });
+        const buffer = await normalizePdfBuffer(result.buffer ?? result);
+        pdfBuffers.push(buffer);
+      } catch (error) {
+        console.error("[email-all] PDF generation failed for report", report.id, error);
+      }
     }
 
     if (pdfBuffers.length === 0) {
@@ -138,7 +171,7 @@ export async function POST(request: NextRequest) {
     const sectionLabel = section?.name ?? "Section";
     const subsectionLabel = subsectionId ? " - Subsection" : "";
     const safeSection = sectionLabel.replace(/\s+/g, "-");
-    const textBody = `Please find attached all ready PSP compaction reports for ${sectionLabel}${subsectionLabel}.\nTotal reports: ${reports.length}`;
+    const textBody = `Please find attached all ready PSP compaction reports for ${sectionLabel}${subsectionLabel}.\nTotal reports: ${pdfBuffers.length}`;
 
     await sendEmail({
       from: getSenderAddress(),
@@ -157,7 +190,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      reports_sent: reports.length,
+      reports_sent: pdfBuffers.length,
     });
   } catch (error) {
     console.error("[email-all] error:", error);
