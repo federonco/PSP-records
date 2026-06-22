@@ -121,36 +121,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: subsectionError.message }, { status: 500 });
     }
 
-    if (!subsectionRow?.id) {
-      return NextResponse.json(
-        { error: "Invalid subsectionId for compaction sync scope" },
-        { status: 400 },
-      );
-    }
+    if (subsectionRow?.id) {
+      if (sectionId && subsectionRow.section_id !== sectionId) {
+        return NextResponse.json(
+          { error: "subsectionId does not belong to sectionId" },
+          { status: 400 },
+        );
+      }
 
-    if (sectionId && subsectionRow.section_id !== sectionId) {
-      return NextResponse.json(
-        { error: "subsectionId does not belong to sectionId" },
-        { status: 400 },
-      );
-    }
+      const cfg = subsectionRow.app_config as Record<string, unknown> | null | undefined;
+      const cfgLocationId = cfg?.location_id;
+      if (
+        typeof cfgLocationId === "string" &&
+        locationId &&
+        cfgLocationId !== locationId
+      ) {
+        console.warn("compaction sync location mismatch", {
+          locationId,
+          cfgLocationId,
+          subsectionId,
+        });
+      }
 
-    const cfg = subsectionRow.app_config as Record<string, unknown> | null | undefined;
-    const cfgLocationId = cfg?.location_id;
-    if (
-      typeof cfgLocationId === "string" &&
-      locationId &&
-      cfgLocationId !== locationId
-    ) {
-      console.warn("compaction sync location mismatch", {
-        locationId,
-        cfgLocationId,
-        subsectionId,
-      });
-    }
+      unified_section_id = subsectionRow.section_id as string;
+      subsection_id = subsectionRow.id as string;
+    } else {
+      // Dotted sections (e.g. "Section 4.1") are stored in `sections`, not `subsections`.
+      const { data: dottedSection, error: dottedError } = await supabase
+        .from("sections")
+        .select("id")
+        .eq("id", subsectionId)
+        .maybeSingle();
 
-    unified_section_id = subsectionRow.section_id as string;
-    subsection_id = subsectionRow.id as string;
+      if (dottedError) {
+        return NextResponse.json({ error: dottedError.message }, { status: 500 });
+      }
+
+      if (!dottedSection?.id) {
+        return NextResponse.json(
+          { error: "Invalid subsectionId for compaction sync scope" },
+          { status: 400 },
+        );
+      }
+
+      unified_section_id = dottedSection.id as string;
+      subsection_id = null;
+    }
   } else {
     if (sectionId) {
       unified_section_id = sectionId;
@@ -203,13 +219,17 @@ export async function POST(request: NextRequest) {
         .eq("unified_section_id", sectionId)
         .is("subsection_id", null);
     }
-  } else if (subsectionId && unified_section_id) {
+  } else if (subsectionId && unified_section_id && subsection_id) {
     recordsQuery = recordsQuery
       .eq("unified_section_id", unified_section_id)
       .eq("subsection_id", subsectionId);
-  } else if (sectionId) {
+  } else if (sectionId || unified_section_id) {
+    const scopeSectionId =
+      unified_section_id && subsection_id === null && subsectionId
+        ? unified_section_id
+        : (sectionId ?? unified_section_id);
     recordsQuery = recordsQuery
-      .eq("unified_section_id", sectionId)
+      .eq("unified_section_id", scopeSectionId)
       .is("subsection_id", null);
   } else {
     return NextResponse.json(

@@ -2752,20 +2752,46 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                     syncTarget: sectionSyncTarget,
                   })}
                   {(section.subsections ?? []).map((sub) => {
+                    const isPromotedSection = sub.source_kind === "section";
                     const subCh = formatSubsectionChainageText(sub);
-                    const subScopeReports = compactionReports.filter(
-                      (r) => r.subsection_id === sub.id,
+                    const subScopeReports = compactionReports.filter((r) =>
+                      isPromotedSection
+                        ? r.unified_section_id === sub.id && !r.subsection_id
+                        : r.subsection_id === sub.id,
                     );
                     const subScopeRecords = Object.values(
                       recordsByLocation,
                     ).flatMap((rows) =>
-                      rows.filter((r) => r.subsection_id === sub.id),
+                      rows.filter((r) =>
+                        isPromotedSection
+                          ? r.unified_section_id === sub.id && !r.subsection_id
+                          : r.subsection_id === sub.id,
+                      ),
                     );
-                    const subSyncTarget = resolveSubsectionScopeSync(
-                      sub,
-                      section.id,
-                      subScopeReports,
-                    );
+                    const subSyncTarget = isPromotedSection
+                      ? resolveSectionScopeSync(
+                          {
+                            id: sub.id,
+                            name: sub.name,
+                            start_ch: sub.start_ch ?? 0,
+                            end_ch: sub.end_ch ?? 0,
+                            direction: sub.direction ?? "onwards",
+                            scope: "shared",
+                            app_config: (sub.app_config ?? {}) as Record<
+                              string,
+                              unknown
+                            >,
+                            qr_token: sub.qr_token,
+                            location_id: sub.location_id,
+                            subsections: [],
+                          },
+                          subScopeReports,
+                        )
+                      : resolveSubsectionScopeSync(
+                          sub,
+                          section.id,
+                          subScopeReports,
+                        );
                     return (
                       <div
                         key={sub.id}
@@ -2843,8 +2869,20 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                               ? sub.app_config
                               : {}),
                           },
-                          sectionRowForItr: section,
+                          sectionRowForItr: isPromotedSection
+                            ? {
+                                start_ch:
+                                  typeof sub.start_ch === "number"
+                                    ? sub.start_ch
+                                    : section.start_ch,
+                                end_ch:
+                                  typeof sub.end_ch === "number"
+                                    ? sub.end_ch
+                                    : section.end_ch,
+                              }
+                            : section,
                           subsectionChainageForItr:
+                            !isPromotedSection &&
                             typeof sub.start_ch === "number" &&
                             typeof sub.end_ch === "number"
                               ? { start: sub.start_ch, end: sub.end_ch }
