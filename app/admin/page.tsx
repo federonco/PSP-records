@@ -1794,6 +1794,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
+    setAssignSupervisorId("");
     await loadAssignments(assignScope);
     await loadSupervisorOverview();
   };
@@ -2842,10 +2843,17 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() =>
-                                    void openAssignSupervisors({
-                                      subsectionId: sub.id,
-                                      title: `${section.name} — ${sub.name}`,
-                                    })
+                                    void openAssignSupervisors(
+                                      isPromotedSection
+                                        ? {
+                                            sectionId: sub.id,
+                                            title: `${section.name} — ${sub.name}`,
+                                          }
+                                        : {
+                                            subsectionId: sub.id,
+                                            title: `${section.name} — ${sub.name}`,
+                                          },
+                                    )
                                   }
                                   disabled={!authEmail}
                                 >
@@ -3389,11 +3397,16 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                   <SelectValue placeholder="Select supervisor" />
                 </SelectTrigger>
                 <SelectContent>
-                  {supervisors.map((sup) => (
-                    <SelectItem key={sup.id} value={sup.id}>
-                      {sup.name}
-                    </SelectItem>
-                  ))}
+                  {supervisors
+                    .filter(
+                      (sup) =>
+                        !assignedSupervisors.some((assigned) => assigned.id === sup.id),
+                    )
+                    .map((sup) => (
+                      <SelectItem key={sup.id} value={sup.id}>
+                        {sup.name}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               <Button onClick={() => void handleAssignSupervisor()} disabled={!assignSupervisorId}>

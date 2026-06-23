@@ -58,6 +58,26 @@ export async function POST(request: NextRequest) {
   }
 
   const adminSupabase = getSupabaseServer({ useServiceRole: true });
+
+  let existingQuery = adminSupabase
+    .from("psp_supervisor_assignments")
+    .select("id")
+    .eq("supervisor_id", supervisorId);
+  existingQuery = sectionId
+    ? existingQuery.eq("section_id", sectionId)
+    : existingQuery.eq("subsection_id", subsectionId);
+
+  const { data: existing, error: existingError } = await existingQuery.maybeSingle();
+  if (existingError) {
+    return NextResponse.json({ error: existingError.message }, { status: 500 });
+  }
+  if (existing) {
+    return NextResponse.json(
+      { error: "Supervisor is already assigned to this section" },
+      { status: 409 },
+    );
+  }
+
   const { data, error } = await adminSupabase
     .from("psp_supervisor_assignments")
     .insert({
@@ -69,6 +89,12 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "Supervisor is already assigned to this section" },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ assignment: data }, { status: 201 });
