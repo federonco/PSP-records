@@ -161,6 +161,17 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       null
     );
   }, [selectedSection, selectedSubsectionId]);
+
+  /** From subsection.app_config.layers_required; default 3 for backwards compat. */
+  const configuredLayersRequired = useMemo(() => {
+    const raw = selectedSubsection?.app_config?.layers_required;
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(n) && n >= 1 && n <= 5) return Math.floor(n);
+    return 3;
+  }, [selectedSubsection]);
+
+  const layersLockedToConfig = Boolean(selectedSubsectionId);
+
   const currentLayerKeys = useMemo(
     () => getLayerFieldKeysForLayerCount(layerCount),
     [layerCount],
@@ -249,6 +260,11 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     setSelectedSectionId(lockedEntry.unifiedSectionId);
     setSelectedSubsectionId(lockedEntry.subsectionId);
   }, [lockedEntry, sections]);
+
+  useEffect(() => {
+    if (!selectedSubsectionId) return;
+    setLayerCount(configuredLayersRequired);
+  }, [selectedSubsectionId, configuredLayersRequired]);
 
   useEffect(() => {
     if (!lockedEntry) return;
@@ -418,7 +434,9 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         const storedLc = Number(payload.layersRequired);
         const storedOk = Number.isFinite(storedLc) && storedLc >= 1;
         const fromKeys = maxLayerIndexFromLayers(incoming);
-        const nextCount = Math.max(3, storedOk ? storedLc : 0, fromKeys);
+        const nextCount = layersLockedToConfig
+          ? configuredLayersRequired
+          : Math.max(3, storedOk ? storedLc : 0, fromKeys);
         setLayerCount(nextCount);
         if (incoming) {
           setLayers((prev) => {
@@ -446,6 +464,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     chainage,
     unifiedSectionId,
     subsectionIdForApi,
+    layersLockedToConfig,
+    configuredLayersRequired,
     pushToast,
     supabase,
   ]);
@@ -475,6 +495,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       return !Number.isNaN(num) && num >= 0 && num <= 35;
      });
   const addLayer = () => {
+    if (layersLockedToConfig) return;
     if (layerCount >= 5) {
       pushToast({
         type: "info",
@@ -488,6 +509,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
   const removeLayer = (layerNum1: number) => {
+    if (layersLockedToConfig) return;
     if (layerNum1 < 4 || layerNum1 > layerCount) return;
     setLayers((prev) => {
       const next = { ...prev };
@@ -552,7 +574,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          subsectionId: subsectionIdForApi,
          chainage,
          siteInspector,
-        layerCount,
+         layerCount: layersLockedToConfig ? configuredLayersRequired : layerCount,
         layers: buildLayersPayload(),
          compactorSn: (() => {
            const eff = getEffectiveLocationFields(activeLocation ?? undefined);
@@ -605,7 +627,9 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         });
       }
     }
-     setLayerCount(3);
+     setLayerCount(
+       layersLockedToConfig ? configuredLayersRequired : 3,
+     );
      setLayers({});
      setInspectorSupervisorId("");
      setSignatureStrokes(null);
@@ -948,7 +972,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                 >
                   <div className="mb-2 flex items-center justify-between gap-2 text-xs font-semibold text-[var(--muted-foreground)]">
                     <span>Layer {layerNum} - Number of blows</span>
-                    {layerNum >= 4 ? (
+                    {layerNum >= 4 && !layersLockedToConfig ? (
                       <Button
                         type="button"
                         variant="ghost"
@@ -1002,6 +1026,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                 </div>
                 );
               })}
+              {!layersLockedToConfig ? (
               <div className="pt-1">
                 <Button
                   type="button"
@@ -1012,6 +1037,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                   + Add Layer
                 </Button>
               </div>
+              ) : null}
             </div>
           </CardHeader>
         </Card>

@@ -310,6 +310,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   >([]);
   const [syncingLocationId, setSyncingLocationId] = useState<string | null>(null);
    const [authEmail, setAuthEmail] = useState<string | null>(null);
+   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
    const [loading, setLoading] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [locationModalMode, setLocationModalMode] = useState<"create" | "edit">(
@@ -347,6 +348,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     "onwards",
   );
   const [createSubIncrement, setCreateSubIncrement] = useState("20");
+  const [createSubLayers, setCreateSubLayers] = useState("3");
   const [createSubSaving, setCreateSubSaving] = useState(false);
   const [editSubOpen, setEditSubOpen] = useState(false);
   const [editSubId, setEditSubId] = useState("");
@@ -357,6 +359,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     "onwards",
   );
   const [editSubIncrement, setEditSubIncrement] = useState("20");
+  const [editSubLayers, setEditSubLayers] = useState("3");
   const [editSubSaving, setEditSubSaving] = useState(false);
   const [sendQrEmail, setSendQrEmail] = useState("");
   const [sendQrLoading, setSendQrLoading] = useState(false);
@@ -596,6 +599,32 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   }, [authEmail, adminMainTab]);
 
   useEffect(() => {
+    if (!authEmail) {
+      setIsSuperAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    const loadRole = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data } = await supabase
+        .from("user_app_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .eq("app_id", "onsite-b")
+        .eq("role", "super_admin")
+        .limit(1);
+      if (!cancelled) setIsSuperAdmin((data?.length ?? 0) > 0);
+    };
+    void loadRole();
+    return () => {
+      cancelled = true;
+    };
+  }, [authEmail, supabase]);
+
+  useEffect(() => {
     if (!authEmail) return;
     loadUnifiedSections();
     loadSupervisors();
@@ -608,6 +637,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     setRecordsByLocation({});
     setCompactionReports([]);
     setSelectedLocationEditId(null);
+    setIsSuperAdmin(false);
   }, [authEmail]);
 
   const loadCompactionReports = async () => {
@@ -1015,6 +1045,11 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       return;
     }
     const incN = Number(createSubIncrement);
+    const layersN = Number(createSubLayers);
+    const layersRequired =
+      Number.isFinite(layersN) && layersN >= 1 && layersN <= 5
+        ? Math.floor(layersN)
+        : 3;
     const token = await getBrowserAccessToken();
     if (!token) {
       pushToast({
@@ -1039,6 +1074,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         direction: createSubDirection,
         app_config: {
           chainage_increment: Number.isFinite(incN) ? incN : 20,
+          layers_required: layersRequired,
         },
       }),
     });
@@ -1067,6 +1103,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     const inc = sub.app_config?.chainage_increment;
     setEditSubIncrement(
       typeof inc === "number" && Number.isFinite(inc) ? String(inc) : "20",
+    );
+    const layers = sub.app_config?.layers_required;
+    setEditSubLayers(
+      typeof layers === "number" && Number.isFinite(layers) && layers >= 1 && layers <= 5
+        ? String(Math.floor(layers))
+        : "3",
     );
   };
 
@@ -1123,6 +1165,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       return;
     }
     const incN = Number(editSubIncrement);
+    const layersN = Number(editSubLayers);
     let mergedApp: Record<string, unknown> = {};
     for (const opt of subsectionEditOptions) {
       if (opt.sub.id === editSubId) {
@@ -1131,6 +1174,10 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       }
     }
     mergedApp.chainage_increment = Number.isFinite(incN) ? incN : 20;
+    mergedApp.layers_required =
+      Number.isFinite(layersN) && layersN >= 1 && layersN <= 5
+        ? Math.floor(layersN)
+        : 3;
 
     const token = await getBrowserAccessToken();
     if (!token) {
@@ -1757,6 +1804,38 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     if (adminMainTab === "supervisors") {
       await loadSupervisorOverview();
     }
+  };
+
+  const handleDeleteSubsection = async (sub: UnifiedSubsectionRow) => {
+    if (!isSuperAdmin || sub.source_kind === "section") return;
+    const ok = window.confirm(
+      `Delete subsection "${sub.name}"?\nThis cannot be undone. Subsections with records cannot be deleted.`,
+    );
+    if (!ok) return;
+    const token = await getBrowserAccessToken();
+    if (!token) {
+      pushToast({ type: "error", title: "Sign in required" });
+      return;
+    }
+    const response = await fetch(`/api/psp/subsections/${sub.id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      pushToast({
+        type: "error",
+        title: "Delete failed",
+        message: (payload as { error?: string }).error ?? "Unable to delete subsection",
+      });
+      return;
+    }
+    pushToast({
+      type: "success",
+      title: "Subsection deleted",
+      message: `"${sub.name}" was removed.`,
+    });
+    await loadUnifiedSections();
   };
 
   const openAssignSupervisors = async (scope: {
@@ -2859,6 +2938,14 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                                 >
                                   Assign Supervisors
                                 </DropdownMenuItem>
+                                {isSuperAdmin && !isPromotedSection ? (
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => void handleDeleteSubsection(sub)}
+                                  >
+                                    Delete Subsection
+                                  </DropdownMenuItem>
+                                ) : null}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </div>
@@ -3197,6 +3284,21 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                 placeholder="20"
               />
             </div>
+            <div className="space-y-1">
+              <label className="psp-label">Layers requeridos</label>
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                className="psp-input"
+                value={createSubLayers}
+                onChange={(e) => setCreateSubLayers(e.target.value)}
+                placeholder="3"
+              />
+              <p className="text-[10px] text-[var(--muted-foreground)]">
+                1–5 layers (default 3). Controls lodge form depth blocks.
+              </p>
+            </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button
@@ -3308,6 +3410,20 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                 value={editSubIncrement}
                 onChange={(e) => setEditSubIncrement(e.target.value)}
               />
+            </div>
+            <div className="space-y-1">
+              <label className="psp-label">Layers requeridos</label>
+              <Input
+                type="number"
+                min={1}
+                max={5}
+                className="psp-input"
+                value={editSubLayers}
+                onChange={(e) => setEditSubLayers(e.target.value)}
+              />
+              <p className="text-[10px] text-[var(--muted-foreground)]">
+                1–5 layers (default 3). Controls lodge form depth blocks.
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
