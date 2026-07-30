@@ -19,6 +19,54 @@ import {
   mergeLocationAppConfig,
 } from "@/lib/location-app-config";
  import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
+
+type ChainageScope = {
+  start: number;
+  end: number;
+  direction: "backwards" | "onwards";
+  increment: number;
+};
+
+function parseChainageIncrement(appConfig: unknown): number {
+  if (!appConfig || typeof appConfig !== "object" || Array.isArray(appConfig)) {
+    return CHAINAGE_STEP;
+  }
+  const raw = (appConfig as Record<string, unknown>).chainage_increment;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : CHAINAGE_STEP;
+}
+
+/** Next chainage within [lo, hi]; snaps to exact end when step would overshoot. Null = range done. */
+function nextChainageInScope(
+  current: number,
+  scope: ChainageScope,
+): number | null {
+  const hi = Math.max(scope.start, scope.end);
+  const lo = Math.min(scope.start, scope.end);
+  const step = scope.increment;
+  if (scope.direction === "backwards") {
+    const candidate = current - step;
+    if (candidate >= lo) return candidate;
+    if (current > lo) return lo;
+    return null;
+  }
+  const candidate = current + step;
+  if (candidate <= hi) return candidate;
+  if (current < hi) return hi;
+  return null;
+}
+
+function clampChainageToScope(value: number, scope: ChainageScope): number {
+  const hi = Math.max(scope.start, scope.end);
+  const lo = Math.min(scope.start, scope.end);
+  return Math.min(hi, Math.max(lo, value));
+}
+
+function isChainageInScope(value: number, scope: ChainageScope): boolean {
+  const hi = Math.max(scope.start, scope.end);
+  const lo = Math.min(scope.start, scope.end);
+  return value >= lo && value <= hi;
+}
  import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -125,6 +173,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [chainage, setChainage] = useState<number>(0);
   const [chainageDisplay, setChainageDisplay] = useState("0.00");
   const [chainageLoading, setChainageLoading] = useState(false);
+  const [rangeComplete, setRangeComplete] = useState(false);
    const [checking, setChecking] = useState(false);
    const [recordId, setRecordId] = useState<string | null>(null);
    const [signOffBy, setSignOffBy] = useState<string | null>(null);
@@ -171,6 +220,58 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [selectedSubsection]);
 
   const layersLockedToConfig = Boolean(selectedSubsectionId);
+
+  const chainageScope = useMemo((): ChainageScope | null => {
+    if (selectedSubsection) {
+      const start = selectedSubsection.start_ch;
+      const end = selectedSubsection.end_ch;
+      if (typeof start !== "number" || typeof end !== "number") return null;
+      const dir =
+        String(selectedSubsection.direction ?? "").toLowerCase() === "onwards"
+          ? "onwards"
+          : "backwards";
+      return {
+        start,
+        end,
+        direction: dir,
+        increment: parseChainageIncrement(selectedSubsection.app_config),
+      };
+    }
+    if (
+      lockedEntry &&
+      typeof lockedEntry.chainageStart === "number" &&
+      typeof lockedEntry.chainageEnd === "number"
+    ) {
+      const dir =
+        String(lockedEntry.chainageDirection ?? "").toLowerCase() === "onwards"
+          ? "onwards"
+          : "backwards";
+      return {
+        start: lockedEntry.chainageStart,
+        end: lockedEntry.chainageEnd,
+        direction: dir,
+        increment: parseChainageIncrement(selectedSection?.app_config),
+      };
+    }
+    if (selectedSection && !selectedSubsectionId) {
+      const start = selectedSection.start_ch;
+      const end = selectedSection.end_ch;
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+      const dir =
+        String(selectedSection.direction ?? "").toLowerCase() === "onwards"
+          ? "onwards"
+          : "backwards";
+      return {
+        start,
+        end,
+        direction: dir,
+        increment: parseChainageIncrement(selectedSection.app_config),
+      };
+    }
+    return null;
+  }, [selectedSubsection, selectedSubsectionId, selectedSection, lockedEntry]);
+
+  const chainageStep = chainageScope?.increment ?? CHAINAGE_STEP;
 
   const currentLayerKeys = useMemo(
     () => getLayerFieldKeysForLayerCount(layerCount),
@@ -265,6 +366,17 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     if (!selectedSubsectionId) return;
     setLayerCount(configuredLayersRequired);
   }, [selectedSubsectionId, configuredLayersRequired]);
+
+  useEffect(() => {
+    setRangeComplete(false);
+  }, [selectedSubsectionId, selectedSectionId, chainageScope?.start, chainageScope?.end]);
+
+  useEffect(() => {
+    if (!chainageScope || !Number.isFinite(chainage)) return;
+    if (!isChainageInScope(chainage, chainageScope)) {
+      setChainage(clampChainageToScope(chainage, chainageScope));
+    }
+  }, [chainageScope]); // eslint-disable-line react-hooks/exhaustive-deps -- clamp when scope changes only
 
   useEffect(() => {
     if (!lockedEntry) return;
@@ -394,7 +506,26 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           });
           return;
         }
-        setChainage(payload.chainage);
+        let next = Number(payload.chainage);
+        if (chainageScope && Number.isFinite(next)) {
+          if (!isChainageInScope(next, chainageScope)) {
+            const snapped = clampChainageToScope(next, chainageScope);
+            // If API jumped past the end, treat range as complete when at terminal
+            // and the terminal would already be "after" the last step.
+            const beyond =
+              chainageScope.direction === "backwards"
+                ? next < Math.min(chainageScope.start, chainageScope.end)
+                : next > Math.max(chainageScope.start, chainageScope.end);
+            if (beyond) {
+              setChainage(snapped);
+              setRangeComplete(true);
+              return;
+            }
+            next = snapped;
+          }
+          setRangeComplete(false);
+        }
+        setChainage(next);
       } finally {
         setChainageLoading(false);
       }
@@ -405,9 +536,20 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     locationName,
     unifiedSectionId,
     subsectionIdForApi,
+    chainageScope,
     pushToast,
     supabase,
   ]);
+
+  const handleChainageBlur = () => {
+    if (!Number.isFinite(chainage)) return;
+    let value = chainage;
+    if (chainageScope) {
+      value = clampChainageToScope(value, chainageScope);
+      if (value !== chainage) setChainage(value);
+    }
+    setChainageDisplay(value.toFixed(2));
+  };
 
   useEffect(() => {
     if (!unifiedSectionId || !chainage) return;
@@ -485,8 +627,10 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
    const canSubmit =
+     !rangeComplete &&
      unifiedSectionId &&
      chainage > 0 &&
+     (!chainageScope || isChainageInScope(chainage, chainageScope)) &&
      siteInspector &&
     currentLayerKeys.every((key) => {
       const value = layers[key];
@@ -535,7 +679,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     );
 
   const handleAdjustChainage = (step: number) => {
-    setChainage((prev) => Math.max(0, prev + step));
+    if (rangeComplete) return;
+    setChainage((prev) => {
+      const next = Math.max(0, prev + step);
+      if (!chainageScope) return next;
+      return clampChainageToScope(next, chainageScope);
+    });
   };
 
   const handleChainageChange = (value: string) => {
@@ -544,11 +693,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     if (!Number.isNaN(parsed)) {
       setChainage(parsed);
     }
-  };
-
-  const handleChainageBlur = () => {
-    if (!Number.isFinite(chainage)) return;
-    setChainageDisplay(chainage.toFixed(2));
   };
 
    const handleLodge = async () => {
@@ -645,6 +789,16 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       if (locationName?.trim()) {
         usp.set("location", locationName.trim());
       }
+    }
+    if (chainageScope) {
+      const scopedNext = nextChainageInScope(chainage, chainageScope);
+      if (scopedNext == null) {
+        setRangeComplete(true);
+        return;
+      }
+      setChainage(scopedNext);
+      setRangeComplete(false);
+      return;
     }
     const nextResponse = await fetch(`/api/psp/next-chainage?${usp.toString()}`, {
       headers: nextToken ? { Authorization: `Bearer ${nextToken}` } : undefined,
@@ -799,6 +953,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         <div className="psp-outer">
           <div className="psp-section-label">Current chainage (m)</div>
 
+          {rangeComplete ? (
+            <p className="mt-[14px] rounded-[12px] border border-[#CFE8DA] bg-[#E7F4EC] px-3 py-2 text-sm font-medium text-[#2F7D55]">
+              Subsección completa — no quedan chainages por cargar
+            </p>
+          ) : null}
+
           <div className="relative mt-[14px] mb-[2px] w-full">
             <Input
               type="text"
@@ -806,7 +966,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               value={chainageDisplay}
               onChange={(event) => handleChainageChange(event.target.value)}
               onBlur={handleChainageBlur}
-              disabled={chainageLoading}
+              disabled={chainageLoading || rangeComplete}
               className="psp-mono psp-hero h-9 min-h-9 w-full rounded-[12px] border border-[var(--input-border)] bg-[var(--inner-bg)] px-12 py-2 text-center text-[var(--ink)] focus:ring-2 focus:ring-[color:var(--primary)/0.25]"
             />
             <Button
@@ -814,7 +974,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               variant="outline"
               size="icon"
               className="psp-stepper-btn absolute left-[-2px] top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[var(--psp-stepper-bg)] text-white shadow-[var(--shadow)] hover:opacity-90"
-              onClick={() => handleAdjustChainage(-CHAINAGE_STEP)}
+              onClick={() => handleAdjustChainage(-chainageStep)}
+              disabled={rangeComplete}
             >
               -
             </Button>
@@ -823,7 +984,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               variant="outline"
               size="icon"
               className="psp-stepper-btn absolute right-[-2px] top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[var(--psp-stepper-bg)] text-white shadow-[var(--shadow)] hover:opacity-90"
-              onClick={() => handleAdjustChainage(CHAINAGE_STEP)}
+              onClick={() => handleAdjustChainage(chainageStep)}
+              disabled={rangeComplete}
             >
               +
             </Button>
