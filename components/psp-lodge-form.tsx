@@ -166,16 +166,25 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     [layerCount],
   );
 
-  const locationId = useMemo(
-    () =>
-      (lockedEntry?.locationId != null && String(lockedEntry.locationId).trim()
-        ? String(lockedEntry.locationId).trim()
-        : null) ??
-      selectedSubsection?.location_id ??
-      selectedSection?.location_id ??
-      null,
-    [lockedEntry, selectedSubsection, selectedSection],
-  );
+  const locationId = useMemo(() => {
+    if (
+      lockedEntry?.locationId != null &&
+      String(lockedEntry.locationId).trim()
+    ) {
+      return String(lockedEntry.locationId).trim();
+    }
+    // Subsection in scope: use ONLY its location_id (null is intentional — do not
+    // inherit parent section.location_id, which may point at a legacy PSP site).
+    if (selectedSubsectionId) {
+      return selectedSubsection?.location_id ?? null;
+    }
+    return selectedSection?.location_id ?? null;
+  }, [
+    lockedEntry,
+    selectedSubsectionId,
+    selectedSubsection,
+    selectedSection,
+  ]);
 
   const subsectionIdForApi = selectedSubsectionId;
 
@@ -534,7 +543,9 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          ...(locationId?.trim()
            ? { locationId: locationId.trim() }
            : {}),
-         ...(locationName?.trim()
+         // Never send locationName alone — resolveLocationId would match legacy
+         // locations by name and reintroduce a location_id the subsection does not have.
+         ...(locationId?.trim() && locationName?.trim()
            ? { locationName: locationName.trim() }
            : {}),
          unifiedSectionId,

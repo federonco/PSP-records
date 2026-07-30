@@ -152,6 +152,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: findErr.message }, { status: 500 });
   }
 
+  if (!existing?.id && resolvedLocationId) {
+    const { data: locationClash, error: clashErr } = await supabase
+      .from("psp_records")
+      .select("id")
+      .eq("location_id", resolvedLocationId)
+      .eq("chainage", clean.chainage)
+      .maybeSingle();
+    if (clashErr) {
+      return NextResponse.json({ error: clashErr.message }, { status: 500 });
+    }
+    if (locationClash?.id) {
+      return NextResponse.json(
+        {
+          error:
+            "Este chainage ya tiene un registro cargado (posiblemente legacy). Contactá al admin antes de continuar.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   if (existing?.id) {
     const mergedRecord = {
       ...(existing as Record<string, unknown>),
