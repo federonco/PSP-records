@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireOnSiteBAdmin } from "@/lib/admin";
+import {
+  requireOnSiteBAdmin,
+  requireOnSiteBSuperAdmin,
+} from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 const ONSITE_B = "onsite-b";
@@ -42,7 +45,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireOnSiteBAdmin(request);
+  const auth = await requireOnSiteBSuperAdmin(request);
   if (!auth.ok) return auth.response;
 
   const { id } = await params;
@@ -61,6 +64,14 @@ export async function DELETE(
       { error: "Cannot delete subsection with existing records" },
       { status: 409 },
     );
+  }
+
+  const { error: reportsErr } = await supabase
+    .from("psp_reports")
+    .delete()
+    .eq("subsection_id", id);
+  if (reportsErr) {
+    return NextResponse.json({ error: reportsErr.message }, { status: 500 });
   }
 
   const { error } = await supabase

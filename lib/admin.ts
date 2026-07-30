@@ -62,10 +62,9 @@ export function isAdminEmail(email?: string | null) {
  * API routes that use Authorization: Bearer &lt;access_token&gt;.
  * Returns 401 if missing session or no onsite-b admin role.
  */
-export async function requireOnSiteBAdmin(request: NextRequest): Promise<
-  | { ok: true; user: User }
-  | { ok: false; response: NextResponse }
-> {
+async function requireBearerUser(
+  request: NextRequest,
+): Promise<{ ok: true; user: User; supabase: SupabaseClient } | { ok: false; response: NextResponse }> {
   const authHeader = request.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token) {
@@ -85,11 +84,39 @@ export async function requireOnSiteBAdmin(request: NextRequest): Promise<
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-  if (!(await isAdmin(supabase))) {
+  return { ok: true, user, supabase };
+}
+
+export async function requireOnSiteBAdmin(request: NextRequest): Promise<
+  | { ok: true; user: User }
+  | { ok: false; response: NextResponse }
+> {
+  const gate = await requireBearerUser(request);
+  if (!gate.ok) return gate;
+  if (!(await isAdmin(gate.supabase))) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
     };
   }
-  return { ok: true, user };
+  return { ok: true, user: gate.user };
+}
+
+/** Destructive actions: only onsite-b super_admin. */
+export async function requireOnSiteBSuperAdmin(request: NextRequest): Promise<
+  | { ok: true; user: User }
+  | { ok: false; response: NextResponse }
+> {
+  const gate = await requireBearerUser(request);
+  if (!gate.ok) return gate;
+  if (!(await isSuperAdmin(gate.supabase))) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Super admin required" },
+        { status: 403 },
+      ),
+    };
+  }
+  return { ok: true, user: gate.user };
 }
