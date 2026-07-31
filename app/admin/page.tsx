@@ -2555,7 +2555,17 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
             {scopeReports.length ? (
               <div className="max-h-[280px] space-y-3 overflow-y-auto rounded-[12px] border border-[var(--border)]/60 bg-[var(--surface)] p-2 pr-1 shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)]">
                 {scopeReports.map((report) => {
-                  const range = report.block_key.replace("-", " → ");
+                  const range = (() => {
+                    const parts = String(report.block_key ?? "").split("-");
+                    if (parts.length >= 2) {
+                      const a = Number(parts[0]);
+                      const b = Number(parts[parts.length - 1]);
+                      if (Number.isFinite(a) && Number.isFinite(b)) {
+                        return `${a.toFixed(2)} → ${b.toFixed(2)}`;
+                      }
+                    }
+                    return String(report.block_key ?? "").replace("-", " → ");
+                  })();
                   const isOpen = report.status === "OPEN";
                   const pendingCount = report.pending_chainages?.length ?? 0;
                   const completedCount = Math.max(0, BLOCK_SIZE - pendingCount);
