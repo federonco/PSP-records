@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CHAINAGE_STEP } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
+  getDepthLiftPlanForChainage,
   getLayerFieldKeysForLayerCount,
   getLayersRequired,
   isRecordComplete,
@@ -80,6 +81,8 @@ export async function POST(request: NextRequest) {
     Number.isFinite(lcNum) && lcNum >= 1
       ? Math.floor(lcNum)
       : getLayersRequired(chainageNumber, depthRanges);
+  const depthPlan = getDepthLiftPlanForChainage(chainageNumber, depthRanges);
+  const completenessSpec = depthPlan?.activeKeys ?? layersRequired;
   const allLayerKeys = getLayerFieldKeysForLayerCount(
     PSP_RECORD_DB_LAYER_COUNT,
   );
@@ -143,7 +146,7 @@ export async function POST(request: NextRequest) {
     ...layerPayload,
     layers_required: layersRequired,
   };
-  const completedAt = isRecordComplete(mergedRecord, layersRequired)
+  const completedAt = isRecordComplete(mergedRecord, completenessSpec)
     ? new Date().toISOString()
     : null;
 

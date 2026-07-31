@@ -4,9 +4,11 @@ import { CHAINAGE_STEP } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
 import {
+  getDepthLiftPlanForChainage,
   getLayerFieldKeysForLayerCount,
   isRecordComplete,
   PSP_RECORD_DB_LAYER_COUNT,
+  resolveDepthRangesForScope,
 } from "@/lib/psp-depth";
 
 function buildRecordPayload(validation: {
@@ -60,7 +62,7 @@ export async function POST(request: NextRequest) {
 
   const { data: secRow, error: secErr } = await supabase
     .from("sections")
-    .select("id")
+    .select("id,app_config")
     .eq("id", sectionIdFromBody)
     .eq("is_active", true)
     .maybeSingle();
@@ -85,10 +87,11 @@ export async function POST(request: NextRequest) {
   const subsectionId = clean.subsectionId || null;
   const layersRequired = layerCount;
 
+  let subsectionAppConfig: unknown = null;
   if (subsectionId) {
     const { data: subRow, error: subErr } = await supabase
       .from("subsections")
-      .select("id,section_id")
+      .select("id,section_id,app_config")
       .eq("id", subsectionId)
       .eq("is_active", true)
       .maybeSingle();
@@ -101,7 +104,15 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    subsectionAppConfig = subRow.app_config;
   }
+
+  const depthRanges = resolveDepthRangesForScope(
+    secRow?.app_config,
+    subsectionAppConfig,
+  );
+  const depthPlan = getDepthLiftPlanForChainage(clean.chainage, depthRanges);
+  const completenessSpec = depthPlan?.activeKeys ?? layersRequired;
 
   const resolvedLocationId =
     clean.locationId || clean.locationName
@@ -179,7 +190,7 @@ export async function POST(request: NextRequest) {
       ...toMerge,
       layers_required: layersRequired,
     };
-    const completedAt = isRecordComplete(mergedRecord, layersRequired)
+    const completedAt = isRecordComplete(mergedRecord, completenessSpec)
       ? new Date().toISOString()
       : null;
     const { data: updated, error: upErr } = await supabase
@@ -219,7 +230,7 @@ export async function POST(request: NextRequest) {
       updated_at: null,
       completed_at: isRecordComplete(
         { ...insertLayers, layers_required: layersRequired } as Record<string, unknown>,
-        layersRequired,
+        completenessSpec,
       )
         ? new Date().toISOString()
         : null,
