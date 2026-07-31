@@ -242,6 +242,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
   const chainageScope = useMemo((): ChainageScope | null => {
+    // Grid / completeness scope only for a real subsection (or QR locked to one).
+    // Subsection = None is freeform: no sections.start_ch/end_ch grid.
     if (selectedSubsection) {
       const start = selectedSubsection.start_ch;
       const end = selectedSubsection.end_ch;
@@ -259,6 +261,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     }
     if (
       lockedEntry &&
+      lockedEntry.subsectionId != null &&
       typeof lockedEntry.chainageStart === "number" &&
       typeof lockedEntry.chainageEnd === "number"
     ) {
@@ -273,23 +276,11 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         increment: parseChainageIncrement(selectedSection?.app_config),
       };
     }
-    if (selectedSection && !selectedSubsectionId) {
-      const start = selectedSection.start_ch;
-      const end = selectedSection.end_ch;
-      if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
-      const dir =
-        String(selectedSection.direction ?? "").toLowerCase() === "onwards"
-          ? "onwards"
-          : "backwards";
-      return {
-        start,
-        end,
-        direction: dir,
-        increment: parseChainageIncrement(selectedSection.app_config),
-      };
-    }
     return null;
-  }, [selectedSubsection, selectedSubsectionId, selectedSection, lockedEntry]);
+  }, [selectedSubsection, selectedSection, lockedEntry]);
+
+  /** Completeness UI only applies when lodging inside a subsection grid. */
+  const subsectionGridActive = Boolean(selectedSubsectionId && chainageScope);
 
   const chainageStep = chainageScope?.increment ?? CHAINAGE_STEP;
 
@@ -390,6 +381,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   useEffect(() => {
     setRangeComplete(false);
   }, [selectedSubsectionId, selectedSectionId, chainageScope?.start, chainageScope?.end]);
+
+  useEffect(() => {
+    if (!selectedSubsectionId) {
+      setRangeComplete(false);
+    }
+  }, [selectedSubsectionId]);
 
   useEffect(() => {
     if (!chainageScope || !Number.isFinite(chainage)) return;
@@ -527,7 +524,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           return;
         }
         let next = Number(payload.chainage);
-        if (chainageScope && Number.isFinite(next)) {
+        if (subsectionGridActive && chainageScope && Number.isFinite(next)) {
           if (!isChainageInScope(next, chainageScope)) {
             const snapped = clampChainageToScope(next, chainageScope);
             // If API jumped past the end, treat range as complete when at terminal
@@ -557,6 +554,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     unifiedSectionId,
     subsectionIdForApi,
     chainageScope,
+    subsectionGridActive,
     pushToast,
     supabase,
   ]);
@@ -647,7 +645,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
    const canSubmit =
-     !rangeComplete &&
+     !(subsectionGridActive && rangeComplete) &&
      unifiedSectionId &&
      chainage > 0 &&
      (!chainageScope || isChainageInScope(chainage, chainageScope)) &&
@@ -699,7 +697,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     );
 
   const handleAdjustChainage = (step: number) => {
-    if (rangeComplete) return;
+    if (subsectionGridActive && rangeComplete) return;
     setChainage((prev) => {
       const next = Math.max(0, prev + step);
       if (!chainageScope) return next;
@@ -810,7 +808,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         usp.set("location", locationName.trim());
       }
     }
-    if (chainageScope) {
+    if (subsectionGridActive && chainageScope) {
       const scopedNext = nextChainageInScope(chainage, chainageScope);
       if (scopedNext == null) {
         setRangeComplete(true);
@@ -973,7 +971,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         <div className="psp-outer">
           <div className="psp-section-label">Current chainage (m)</div>
 
-          {rangeComplete ? (
+          {subsectionGridActive && rangeComplete ? (
             <p className="mt-[14px] rounded-[12px] border border-[#CFE8DA] bg-[#E7F4EC] px-3 py-2 text-sm font-medium text-[#2F7D55]">
               Subsection complete — no remaining chainages to lodge
             </p>
@@ -986,7 +984,9 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               value={chainageDisplay}
               onChange={(event) => handleChainageChange(event.target.value)}
               onBlur={handleChainageBlur}
-              disabled={chainageLoading || rangeComplete}
+              disabled={
+                chainageLoading || (subsectionGridActive && rangeComplete)
+              }
               className="psp-mono psp-hero h-9 min-h-9 w-full rounded-[12px] border border-[var(--input-border)] bg-[var(--inner-bg)] px-12 py-2 text-center text-[var(--ink)] focus:ring-2 focus:ring-[color:var(--primary)/0.25]"
             />
             <Button
@@ -995,7 +995,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               size="icon"
               className="psp-stepper-btn absolute left-[-2px] top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[var(--psp-stepper-bg)] text-white shadow-[var(--shadow)] hover:opacity-90"
               onClick={() => handleAdjustChainage(-chainageStep)}
-              disabled={rangeComplete}
+              disabled={subsectionGridActive && rangeComplete}
             >
               -
             </Button>
@@ -1005,7 +1005,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
               size="icon"
               className="psp-stepper-btn absolute right-[-2px] top-1/2 z-10 size-9 min-w-9 min-h-9 -translate-y-1/2 rounded-full border border-white/30 bg-[var(--psp-stepper-bg)] text-white shadow-[var(--shadow)] hover:opacity-90"
               onClick={() => handleAdjustChainage(chainageStep)}
-              disabled={rangeComplete}
+              disabled={subsectionGridActive && rangeComplete}
             >
               +
             </Button>
