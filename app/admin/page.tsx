@@ -3293,7 +3293,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               />
             </div>
             <div className="space-y-1">
-              <label className="psp-label">Layers requeridos</label>
+              <label className="psp-label">Layers required</label>
               <Input
                 type="number"
                 min={1}
@@ -3420,7 +3420,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               />
             </div>
             <div className="space-y-1">
-              <label className="psp-label">Layers requeridos</label>
+              <label className="psp-label">Layers required</label>
               <Input
                 type="number"
                 min={1}

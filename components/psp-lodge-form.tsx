@@ -975,7 +975,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
 
           {rangeComplete ? (
             <p className="mt-[14px] rounded-[12px] border border-[#CFE8DA] bg-[#E7F4EC] px-3 py-2 text-sm font-medium text-[#2F7D55]">
-              Subsección completa — no quedan chainages por cargar
+              Subsection complete — no remaining chainages to lodge
             </p>
           ) : null}
 

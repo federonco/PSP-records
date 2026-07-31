@@ -45,7 +45,7 @@
    const baseClass = className ?? "";
    const classWhenArmed = baseClass.replace(/\bpsp-button-lodge\b/g, "").trim();
 
-   /* Estado inicial "Lodge Record": botón nativo azul para clic fiable y texto blanco */
+   /* Initial "Lodge Record" state: native blue button for reliable click + white text */
    if (!armed) {
      return (
        <button
@@ -64,7 +64,7 @@
      );
    }
 
-   /* CONFIRM? / otros estados: botón normal con confirmClassName (amarillo, etc.) */
+   /* CONFIRM? / other states: normal button with confirmClassName (yellow, etc.) */
    return (
      <Button
        type="button"

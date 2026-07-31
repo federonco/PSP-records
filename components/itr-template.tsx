@@ -90,7 +90,7 @@ export default function ITRTemplate({
                 <td key={i}>{c.l1_150 ?? ""}</td>
               ))}
             </tr>
-            {/* repetís para todos los campos */}
+            {/* repeat for all fields */}
           </tbody>
         </table>
       </div>

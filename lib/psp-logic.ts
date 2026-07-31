@@ -135,12 +135,12 @@ export function getNextChainageFromSet(
 ): number {
   const numeric = chainages.filter((value) => Number.isFinite(value));
 
-  // Sin registros: arrancar desde start_ch
+  // No records yet: start from start_ch
   if (numeric.length === 0) {
     return typeof startChainage === "number" ? startChainage : START_CHAINAGE;
   }
 
-  // Con registros: último lodgeado ± step
+  // With records: last lodged ± step
   const lastLodged = numeric[0];
   const step = direction === "onwards" ? CHAINAGE_STEP : -CHAINAGE_STEP;
   const existing = new Set(numeric);
