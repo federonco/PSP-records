@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "This chainage already has a record loaded (possibly legacy). Contact an admin before continuing.",
+            "This chainage already has a record lodged (possibly legacy). Contact an admin before continuing.",
         },
         { status: 409 },
       );
