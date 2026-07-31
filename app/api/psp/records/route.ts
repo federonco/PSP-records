@@ -190,9 +190,15 @@ export async function POST(request: NextRequest) {
       ...toMerge,
       layers_required: layersRequired,
     };
-    const completedAt = isRecordComplete(mergedRecord, completenessSpec)
-      ? new Date().toISOString()
-      : null;
+    const existingCompletedAt =
+      (existing as Record<string, unknown>).completed_at != null
+        ? String((existing as Record<string, unknown>).completed_at)
+        : null;
+    const completedAt =
+      existingCompletedAt ??
+      (isRecordComplete(mergedRecord, completenessSpec)
+        ? new Date().toISOString()
+        : null);
     const { data: updated, error: upErr } = await supabase
       .from("psp_records")
       .update({
