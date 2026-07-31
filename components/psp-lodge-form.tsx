@@ -11,7 +11,7 @@
    type SignatureStrokes,
  } from "@/components/signature-pad";
  import { useToast } from "@/components/toast";
- import { CHAINAGE_STEP } from "@/lib/psp";
+ import { CHAINAGE_STEP, buildExpectedChainages, isChainageGridComplete, readChainageIncrement } from "@/lib/psp";
 import {
   getDepthLiftPlanForChainage,
   getLayerFieldKeysForLayerCount,
@@ -33,12 +33,7 @@ type ChainageScope = {
 };
 
 function parseChainageIncrement(appConfig: unknown): number {
-  if (!appConfig || typeof appConfig !== "object" || Array.isArray(appConfig)) {
-    return CHAINAGE_STEP;
-  }
-  const raw = (appConfig as Record<string, unknown>).chainage_increment;
-  const n = typeof raw === "number" ? raw : Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : CHAINAGE_STEP;
+  return readChainageIncrement(appConfig) ?? CHAINAGE_STEP;
 }
 
 /** Next chainage within [lo, hi]; snaps to exact end when step would overshoot. Null = range done. */
@@ -179,6 +174,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   const [chainageDisplay, setChainageDisplay] = useState("0.00");
   const [chainageLoading, setChainageLoading] = useState(false);
   const [rangeComplete, setRangeComplete] = useState(false);
+  const [completedChainages, setCompletedChainages] = useState<number[]>([]);
+  const [completenessTick, setCompletenessTick] = useState(0);
    const [checking, setChecking] = useState(false);
    const [recordId, setRecordId] = useState<string | null>(null);
    const [signOffBy, setSignOffBy] = useState<string | null>(null);
@@ -282,6 +279,26 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   /** Completeness UI only applies when lodging inside a subsection grid. */
   const subsectionGridActive = Boolean(selectedSubsectionId && chainageScope);
 
+  const gridIncrement = useMemo(() => {
+    if (!selectedSubsection) return null;
+    return readChainageIncrement(selectedSubsection.app_config);
+  }, [selectedSubsection]);
+
+  const expectedChainages = useMemo(() => {
+    if (!subsectionGridActive || !chainageScope || gridIncrement == null) {
+      return null;
+    }
+    return buildExpectedChainages(
+      chainageScope.start,
+      chainageScope.end,
+      gridIncrement,
+    );
+  }, [subsectionGridActive, chainageScope, gridIncrement]);
+
+  const incrementMissing = Boolean(
+    selectedSubsectionId && selectedSubsection && gridIncrement == null,
+  );
+
   const chainageStep = chainageScope?.increment ?? CHAINAGE_STEP;
 
   const currentLayerKeys = useMemo(
@@ -380,13 +397,65 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
 
   useEffect(() => {
     setRangeComplete(false);
+    setCompletedChainages([]);
   }, [selectedSubsectionId, selectedSectionId, chainageScope?.start, chainageScope?.end]);
 
   useEffect(() => {
     if (!selectedSubsectionId) {
       setRangeComplete(false);
+      setCompletedChainages([]);
     }
   }, [selectedSubsectionId]);
+
+  useEffect(() => {
+    if (!subsectionIdForApi || !unifiedSectionId) {
+      setCompletedChainages([]);
+      return;
+    }
+    let cancelled = false;
+    const loadCompleted = async () => {
+      const { data, error } = await supabase
+        .from("psp_records")
+        .select("chainage,completed_at")
+        .eq("unified_section_id", unifiedSectionId)
+        .eq("subsection_id", subsectionIdForApi);
+      if (cancelled) return;
+      if (error || !data) {
+        setCompletedChainages([]);
+        return;
+      }
+      setCompletedChainages(
+        data
+          .filter(
+            (r: { chainage: number; completed_at: string | null }) =>
+              r.completed_at != null,
+          )
+          .map((r: { chainage: number; completed_at: string | null }) =>
+            Number(r.chainage),
+          )
+          .filter(Number.isFinite),
+      );
+    };
+    void loadCompleted();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    subsectionIdForApi,
+    unifiedSectionId,
+    completenessTick,
+    supabase,
+  ]);
+
+  useEffect(() => {
+    if (!subsectionGridActive || !expectedChainages) {
+      setRangeComplete(false);
+      return;
+    }
+    setRangeComplete(
+      isChainageGridComplete(expectedChainages, completedChainages),
+    );
+  }, [subsectionGridActive, expectedChainages, completedChainages]);
 
   useEffect(() => {
     if (!chainageScope || !Number.isFinite(chainage)) return;
@@ -527,20 +596,17 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         if (subsectionGridActive && chainageScope && Number.isFinite(next)) {
           if (!isChainageInScope(next, chainageScope)) {
             const snapped = clampChainageToScope(next, chainageScope);
-            // If API jumped past the end, treat range as complete when at terminal
-            // and the terminal would already be "after" the last step.
             const beyond =
               chainageScope.direction === "backwards"
                 ? next < Math.min(chainageScope.start, chainageScope.end)
                 : next > Math.max(chainageScope.start, chainageScope.end);
             if (beyond) {
+              // Stay at terminal for UX; completeness comes from completed_at grid.
               setChainage(snapped);
-              setRangeComplete(true);
               return;
             }
             next = snapped;
           }
-          setRangeComplete(false);
         }
         setChainage(next);
       } finally {
@@ -811,13 +877,14 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     if (subsectionGridActive && chainageScope) {
       const scopedNext = nextChainageInScope(chainage, chainageScope);
       if (scopedNext == null) {
-        setRangeComplete(true);
+        setCompletenessTick((t) => t + 1);
         return;
       }
       setChainage(scopedNext);
-      setRangeComplete(false);
+      setCompletenessTick((t) => t + 1);
       return;
     }
+    setCompletenessTick((t) => t + 1);
     const nextResponse = await fetch(`/api/psp/next-chainage?${usp.toString()}`, {
       headers: nextToken ? { Authorization: `Bearer ${nextToken}` } : undefined,
     });
@@ -970,6 +1037,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
 
         <div className="psp-outer">
           <div className="psp-section-label">Current chainage (m)</div>
+
+          {incrementMissing ? (
+            <p className="mt-[14px] rounded-[12px] border border-[#F5D0A9] bg-[#FFF7ED] px-3 py-2 text-sm font-medium text-[#9A3412]">
+              Chainage increment not configured
+            </p>
+          ) : null}
 
           {subsectionGridActive && rangeComplete ? (
             <p className="mt-[14px] rounded-[12px] border border-[#CFE8DA] bg-[#E7F4EC] px-3 py-2 text-sm font-medium text-[#2F7D55]">

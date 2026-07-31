@@ -61,6 +61,7 @@ type Location = {
   location_id: string | null;
   chainage: number;
   sign_off_at?: string | null;
+  completed_at?: string | null;
   unified_section_id?: string | null;
   subsection_id?: string | null;
 };
@@ -261,8 +262,12 @@ function getProgressSummary(
     const length = Math.abs(end - start);
     if (length > 0) {
       const totalSteps = Math.floor(length / CHAINAGE_STEP) + 1;
-      const uniqueChainages = new Set(records.map((row) => row.chainage));
-      const covered = Math.min(uniqueChainages.size, totalSteps);
+      const uniqueCompleted = new Set(
+        records
+          .filter((row) => row.completed_at != null)
+          .map((row) => row.chainage),
+      );
+      const covered = Math.min(uniqueCompleted.size, totalSteps);
       lengthPercent = Math.min(
         100,
         Math.round((covered / totalSteps) * 100),
@@ -727,7 +732,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         ? supabase
             .from("psp_records")
             .select(
-              "id,location_id,chainage,sign_off_at,unified_section_id,subsection_id",
+              "id,location_id,chainage,sign_off_at,completed_at,unified_section_id,subsection_id",
             )
             .in("location_id", safeLocIds)
             .order("chainage", { ascending: false })
@@ -739,7 +744,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         ? supabase
             .from("psp_records")
             .select(
-              "id,location_id,chainage,sign_off_at,unified_section_id,subsection_id",
+              "id,location_id,chainage,sign_off_at,completed_at,unified_section_id,subsection_id",
             )
             .in("unified_section_id", sectionIds)
             .order("chainage", { ascending: false })
