@@ -2590,7 +2590,14 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                         </p>
                         {isOpen && report.pending_chainages?.length ? (
                           <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                            Pending Ch: {report.pending_chainages.join(", ")}
+                            Pending Ch:{" "}
+                            {report.pending_chainages
+                              .map((ch) =>
+                                Number.isFinite(Number(ch))
+                                  ? Number(ch).toFixed(2)
+                                  : String(ch),
+                              )
+                              .join(", ")}
                           </p>
                         ) : null}
                         {isOpen ? (
