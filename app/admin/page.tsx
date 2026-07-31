@@ -40,6 +40,11 @@ import {
    DropdownMenuTrigger,
  } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  calculateDepthLiftPlan,
+  LIFT_BAND_MM,
+  LIFT_OFFSET_MM,
+} from "@/lib/psp-depth";
 
 type Location = {
   id: string;
@@ -1929,10 +1934,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     );
   };
 
-  function calcLayers(depthM: number): number {
-    const depthMm = depthM * 1000;
-    const layers = Math.ceil((depthMm - 150) / 900);
-    return Math.max(layers, 1);
+  function calcDepthLiftSummary(depthM: number): {
+    layers: number;
+    totalLifts: number;
+  } {
+    const plan = calculateDepthLiftPlan(depthM * 1000);
+    return { layers: plan.layers, totalLifts: plan.totalLifts };
   }
 
   function buildDepthRowsFromAppConfig(
@@ -1962,8 +1969,9 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
     const normalized = parsed.map((r) => {
       const depthM = Number(r.max_depth_m);
       if (Number.isFinite(depthM)) {
-        const snappedLayers = calcLayers(depthM);
-        const snappedDepthM = (150 + snappedLayers * 900) / 1000;
+        const plan = calculateDepthLiftPlan(depthM * 1000);
+        const snappedDepthM =
+          (LIFT_OFFSET_MM + plan.totalLifts * LIFT_BAND_MM) / 1000;
         return { ...r, max_depth_m: String(snappedDepthM) };
       }
       return r;
@@ -3572,7 +3580,11 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                 <tbody>
                   {depthRanges.map((range, index) => {
                     const depthM = Number(range.max_depth_m);
-                    const layers = Number.isFinite(depthM) ? calcLayers(depthM) : 3;
+                    const summary = Number.isFinite(depthM)
+                      ? calcDepthLiftSummary(depthM)
+                      : { layers: 3, totalLifts: 9 };
+                    const layers = summary.layers;
+                    const totalLifts = summary.totalLifts;
                     const rowErrors = depthValidation.errorsByIndex[index] ?? [];
                     const rowHasError = rowErrors.length > 0;
                     const layerTone =
@@ -3632,7 +3644,8 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                         </td>
                         <td className="px-2 py-2 align-top">
                           <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-semibold ${layerTone}`}>
-                            {layers} layer{layers === 1 ? "" : "s"}
+                            {layers} layer{layers === 1 ? "" : "s"} · {totalLifts} lift
+                            {totalLifts === 1 ? "" : "s"}
                           </span>
                           {rowHasError ? (
                             <p className="mt-1 text-[10px] text-[#DC2626]">
