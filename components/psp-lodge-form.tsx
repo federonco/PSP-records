@@ -12,7 +12,12 @@
  } from "@/components/signature-pad";
  import { useToast } from "@/components/toast";
  import { CHAINAGE_STEP } from "@/lib/psp";
-import { getLayerFieldKeysForLayerCount } from "@/lib/psp-depth";
+import {
+  getDepthLiftPlanForChainage,
+  getLayerFieldKeysForLayerCount,
+  resolveDepthRangesForScope,
+  type LiftSuffix,
+} from "@/lib/psp-depth";
 import {
   getEffectiveLocationFields,
   LOCATION_LIST_SELECT,
@@ -220,6 +225,21 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [selectedSubsection]);
 
   const layersLockedToConfig = Boolean(selectedSubsectionId);
+
+  /** Null = no matching depth_range → show all 3 lifts per layer (current behaviour). */
+  const depthLiftPlan = useMemo(() => {
+    if (!Number.isFinite(chainage)) return null;
+    const ranges = resolveDepthRangesForScope(
+      selectedSection?.app_config,
+      selectedSubsection?.app_config,
+    );
+    return getDepthLiftPlanForChainage(chainage, ranges);
+  }, [chainage, selectedSection?.app_config, selectedSubsection?.app_config]);
+
+  const isLiftActive = (layerNum: number, suffix: LiftSuffix): boolean => {
+    if (!depthLiftPlan) return true;
+    return depthLiftPlan.activeKeys.includes(`l${layerNum}_${suffix}`);
+  };
 
   const chainageScope = useMemo((): ChainageScope | null => {
     if (selectedSubsection) {
@@ -1149,9 +1169,10 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                   </div>
                   <div className="grid grid-cols-[1fr_1fr_1fr] gap-2">
                     {([0, 1, 2] as const).map((liftIdx) => {
-                      const key = `l${layerNum}_${
-                        liftIdx === 0 ? "150" : liftIdx === 1 ? "450" : "750"
-                      }`;
+                      const suffix =
+                        liftIdx === 0 ? "150" : liftIdx === 1 ? "450" : "750";
+                      if (!isLiftActive(layerNum, suffix)) return null;
+                      const key = `l${layerNum}_${suffix}`;
                       const value = layers[key] ?? "";
                       const warning = layerOutOfRange(value);
                       return (
