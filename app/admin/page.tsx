@@ -420,6 +420,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   const [depthRanges, setDepthRanges] = useState<
     { from_ch: string; to_ch: string; max_depth_m: string }[]
   >([{ from_ch: "", to_ch: "", max_depth_m: "" }]);
+  const [depthLayersRequired, setDepthLayersRequired] = useState("3");
   const locationIdsKey = useMemo(
     () => [...new Set(locations.map((l) => l.id))].sort().join(","),
     [locations],
@@ -1998,6 +1999,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         ? (section.app_config as Record<string, unknown>)
         : null;
     setDepthRanges(buildDepthRowsFromAppConfig(cfg));
+    const layers = cfg?.layers_required;
+    setDepthLayersRequired(
+      typeof layers === "number" && layers >= 1 && layers <= 5
+        ? String(Math.floor(layers))
+        : "3",
+    );
     setDepthConfigOpen(true);
   };
 
@@ -2016,6 +2023,12 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         ? (sub.app_config as Record<string, unknown>)
         : null;
     setDepthRanges(buildDepthRowsFromAppConfig(subCfg));
+    const layers = subCfg?.layers_required;
+    setDepthLayersRequired(
+      typeof layers === "number" && layers >= 1 && layers <= 5
+        ? String(Math.floor(layers))
+        : "3",
+    );
     setDepthConfigOpen(true);
   };
 
@@ -2101,7 +2114,13 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ depth_ranges: payload }),
+      body: JSON.stringify({
+        depth_ranges: payload,
+        layers_required: (() => {
+          const n = Number(depthLayersRequired);
+          return Number.isFinite(n) && n >= 1 && n <= 5 ? Math.floor(n) : 3;
+        })(),
+      }),
     });
     const result = await response.json();
     if (!response.ok) {
@@ -3587,6 +3606,24 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
                 Default (entire section):
               </span>{" "}
               3 layers
+            </div>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[160px]">
+                <label className="psp-label">Layers required (1–5)</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={5}
+                  step={1}
+                  className="psp-input"
+                  value={depthLayersRequired}
+                  onChange={(e) => setDepthLayersRequired(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                Frozen on each record at lodge time. Depth ranges can override per
+                chainage.
+              </p>
             </div>
             <div className="overflow-x-auto rounded-[10px] border border-[var(--border)]">
               <table className="min-w-full text-xs">

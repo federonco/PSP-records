@@ -190,9 +190,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, message: "Email sent" });
   } catch (error) {
     console.error("ITR-EXB-003 email failed", error);
+    const message = extractErrorMessage(error);
+    const isNoRecords =
+      (error &&
+        typeof error === "object" &&
+        (error as { code?: string }).code === "NO_RECORDS") ||
+      /no records found/i.test(message);
     return NextResponse.json(
-      { error: extractErrorMessage(error) },
-      { status: 500 },
+      { error: isNoRecords ? "No records found for this selection" : message },
+      { status: isNoRecords ? 409 : 500 },
     );
   }
 }

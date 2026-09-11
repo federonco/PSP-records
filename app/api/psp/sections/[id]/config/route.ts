@@ -15,6 +15,13 @@ export async function PATCH(
     return NextResponse.json({ error: "depth_ranges array is required" }, { status: 400 });
   }
 
+  const layersRaw = body?.layers_required;
+  const layersN = typeof layersRaw === "number" ? layersRaw : Number(layersRaw);
+  const layersRequired =
+    Number.isFinite(layersN) && layersN >= 1 && layersN <= 5
+      ? Math.floor(layersN)
+      : null;
+
   const normalized = depthRanges
     .map((r: unknown) => {
       const row =
@@ -48,7 +55,13 @@ export async function PATCH(
     current.app_config && typeof current.app_config === "object" && !Array.isArray(current.app_config)
       ? (current.app_config as Record<string, unknown>)
       : {};
-  const nextConfig = { ...currentConfig, depth_ranges: normalized };
+  const nextConfig: Record<string, unknown> = {
+    ...currentConfig,
+    depth_ranges: normalized,
+  };
+  if (layersRequired != null) {
+    nextConfig.layers_required = layersRequired;
+  }
   const { data, error } = await supabase
     .from("sections")
     .update({ app_config: nextConfig })

@@ -66,6 +66,12 @@ export async function POST(request: NextRequest) {
     if (recordsError) {
       return NextResponse.json({ error: recordsError.message }, { status: 500 });
     }
+    if (!records?.length) {
+      return NextResponse.json(
+        { error: "No records found for this selection" },
+        { status: 409 },
+      );
+    }
     const formatter = new Intl.DateTimeFormat("en-GB", {
       timeZone: "Australia/Perth",
       day: "2-digit",
@@ -75,9 +81,9 @@ export async function POST(request: NextRequest) {
     const reportDate = formatter.format(new Date());
     const templateData: CompactionTemplateData = {
       REPORT_DATE: reportDate,
-      SUPERVISOR_NAME: records?.[0]?.site_inspector ?? "",
+      SUPERVISOR_NAME: records[0]?.site_inspector ?? "",
       WORK_LOCATION: report.location_id,
-      records: (records ?? []).map((record) => ({
+      records: records.map((record) => ({
         date: formatter.format(new Date(record.recorded_at)),
         ch: record.chainage,
         l1_a: record.l1_150,

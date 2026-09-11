@@ -4,12 +4,11 @@ import { CHAINAGE_STEP } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
 import {
-  getDepthLiftPlanForChainage,
   getLayerFieldKeysForLayerCount,
-  isRecordComplete,
   PSP_RECORD_DB_LAYER_COUNT,
-  resolveDepthRangesForScope,
 } from "@/lib/psp-depth";
+import { resolveLayersRequired } from "@/lib/psp-layers";
+import { isRecordComplete, nextCompletedAt } from "@/lib/psp-status";
 
 function buildRecordPayload(validation: {
   clean: {
@@ -33,6 +32,7 @@ function buildRecordPayload(validation: {
     chainage: clean.chainage,
     site_inspector: clean.siteInspector,
     compactor_sn: clean.compactorSn ?? null,
+    // Always write explicitly — never rely on the column default.
     layers_required: clean.layersRequired,
     ...clean.layers,
   };
@@ -51,10 +51,6 @@ export async function POST(request: NextRequest) {
   if (!Number.isFinite(chainageRaw)) {
     return NextResponse.json({ error: "Invalid chainage" }, { status: 400 });
   }
-
-  const lcRaw = Number(body?.layerCount);
-  const layerCount =
-    Number.isFinite(lcRaw) && lcRaw >= 1 ? Math.floor(lcRaw) : 3;
 
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
@@ -77,28 +73,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const validation = validateSaveData(body, layerCount);
-  if (!validation.ok) {
-    return NextResponse.json({ error: validation.error }, { status: 400 });
-  }
-
-  const { clean } = validation;
-  const unifiedSectionId = clean.unifiedSectionId!;
-  const subsectionId = clean.subsectionId || null;
-  const layersRequired = layerCount;
+  const subsectionIdRaw =
+    String(body?.subsectionId ?? "").trim() || null;
 
   let subsectionAppConfig: unknown = null;
-  if (subsectionId) {
+  if (subsectionIdRaw) {
     const { data: subRow, error: subErr } = await supabase
       .from("subsections")
       .select("id,section_id,app_config")
-      .eq("id", subsectionId)
+      .eq("id", subsectionIdRaw)
       .eq("is_active", true)
       .maybeSingle();
     if (subErr) {
       return NextResponse.json({ error: subErr.message }, { status: 500 });
     }
-    if (!subRow || subRow.section_id !== unifiedSectionId) {
+    if (!subRow || subRow.section_id !== sectionIdFromBody) {
       return NextResponse.json(
         { error: "subsection_id does not belong to this section" },
         { status: 400 },
@@ -107,12 +96,21 @@ export async function POST(request: NextRequest) {
     subsectionAppConfig = subRow.app_config;
   }
 
-  const depthRanges = resolveDepthRangesForScope(
-    secRow?.app_config,
+  // Resolve layers for NEW inserts only. Existing rows keep frozen layers_required.
+  const resolvedLayers = resolveLayersRequired({
     subsectionAppConfig,
-  );
-  const depthPlan = getDepthLiftPlanForChainage(clean.chainage, depthRanges);
-  const completenessSpec = depthPlan?.activeKeys ?? layersRequired;
+    sectionAppConfig: secRow.app_config,
+    chainage: chainageRaw,
+  });
+
+  const validation = validateSaveData(body, resolvedLayers);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
+  const { clean } = validation;
+  const unifiedSectionId = clean.unifiedSectionId!;
+  const subsectionId = clean.subsectionId || null;
 
   const resolvedLocationId =
     clean.locationId || clean.locationName
@@ -131,20 +129,6 @@ export async function POST(request: NextRequest) {
       ([k, v]) => dbLayerKeys.has(k) && v !== undefined,
     ),
   );
-
-  const rowPayload = buildRecordPayload({
-    clean: {
-      chainage: clean.chainage,
-      siteInspector: clean.siteInspector,
-      compactorSn: clean.compactorSn ?? null,
-      layers: clean.layers,
-      layersRequired,
-      unifiedSectionId,
-      subsectionId: clean.subsectionId ?? null,
-      legacySectionId: clean.legacySectionId ?? null,
-    },
-    locationIdDb: resolvedLocationId,
-  });
 
   let recordId: string | null = null;
 
@@ -185,30 +169,29 @@ export async function POST(request: NextRequest) {
   }
 
   if (existing?.id) {
+    const existingRow = existing as Record<string, unknown>;
+    // Frozen at insert — do not overwrite with newly resolved config.
+    const frozenLayers =
+      Number.isFinite(Number(existingRow.layers_required)) &&
+      Number(existingRow.layers_required) >= 1
+        ? Math.floor(Number(existingRow.layers_required))
+        : resolvedLayers;
     const mergedRecord = {
-      ...(existing as Record<string, unknown>),
+      ...existingRow,
       ...toMerge,
-      layers_required: layersRequired,
+      layers_required: frozenLayers,
     };
-    const existingCompletedAt =
-      (existing as Record<string, unknown>).completed_at != null
-        ? String((existing as Record<string, unknown>).completed_at)
-        : null;
-    const completedAt =
-      existingCompletedAt ??
-      (isRecordComplete(mergedRecord, completenessSpec)
-        ? new Date().toISOString()
-        : null);
+    const completedAt = nextCompletedAt(existingRow, mergedRecord);
     const { data: updated, error: upErr } = await supabase
       .from("psp_records")
       .update({
-        site_inspector: rowPayload.site_inspector,
-        compactor_sn: rowPayload.compactor_sn,
-        unified_section_id: rowPayload.unified_section_id,
-        subsection_id: rowPayload.subsection_id,
-        section_id: rowPayload.section_id,
-        location_id: rowPayload.location_id,
-        layers_required: layersRequired,
+        site_inspector: clean.siteInspector,
+        compactor_sn: clean.compactorSn ?? null,
+        unified_section_id: unifiedSectionId,
+        subsection_id: subsectionId,
+        section_id: clean.legacySectionId || null,
+        location_id: resolvedLocationId,
+        layers_required: frozenLayers,
         updated_at: new Date().toISOString(),
         completed_at: completedAt,
         ...toMerge,
@@ -221,9 +204,26 @@ export async function POST(request: NextRequest) {
     }
     recordId = updated?.id ?? existing.id;
   } else {
+    const rowPayload = buildRecordPayload({
+      clean: {
+        chainage: clean.chainage,
+        siteInspector: clean.siteInspector,
+        compactorSn: clean.compactorSn ?? null,
+        layers: clean.layers,
+        layersRequired: resolvedLayers,
+        unifiedSectionId,
+        subsectionId: clean.subsectionId ?? null,
+        legacySectionId: clean.legacySectionId ?? null,
+      },
+      locationIdDb: resolvedLocationId,
+    });
     const insertLayers = Object.fromEntries(
       Object.entries(rowPayload).filter(([k]) => dbLayerKeys.has(k)),
     ) as Record<string, number | null>;
+    const insertRecord = {
+      ...insertLayers,
+      layers_required: resolvedLayers,
+    } as Record<string, unknown>;
     const insertedPayload = {
       unified_section_id: rowPayload.unified_section_id,
       subsection_id: rowPayload.subsection_id,
@@ -232,12 +232,9 @@ export async function POST(request: NextRequest) {
       chainage: rowPayload.chainage,
       site_inspector: rowPayload.site_inspector,
       compactor_sn: rowPayload.compactor_sn,
-      layers_required: layersRequired,
+      layers_required: resolvedLayers,
       updated_at: null,
-      completed_at: isRecordComplete(
-        { ...insertLayers, layers_required: layersRequired } as Record<string, unknown>,
-        completenessSpec,
-      )
+      completed_at: isRecordComplete(insertRecord)
         ? new Date().toISOString()
         : null,
       ...insertLayers,

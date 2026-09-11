@@ -1,9 +1,10 @@
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { CHAINAGE_STEP } from "@/lib/psp";
 import { getHistoricalBlocksFromChainages } from "@/lib/psp-logic";
-import type { CompactionTemplateData } from "@/lib/reporting/compaction";
+import type { CompactionTemplateData, CompactionRecord } from "@/lib/reporting/compaction";
 import { renderCompactionHTML } from "@/lib/reports/compaction-html";
 import { getPenetrometerSnForTemplate } from "@/lib/location-app-config";
+import { recordStatus, isRecordComplete } from "@/lib/psp-status";
 import fs from "fs";
 import puppeteer from "puppeteer-core";
 import chromium from "@sparticuz/chromium-min";
@@ -178,7 +179,8 @@ function buildCompactionBlockInfo(params: {
     params.pendingChainages ??
     params.expected.filter((chainage) => {
       const record = recordMap.get(chainage);
-      return !record?.completed_at;
+      if (!record) return true;
+      return !isRecordComplete(record as unknown as Record<string, unknown>);
     });
   const status =
     params.reportStatus === "OPEN" || pending.length > 0 ? "OPEN" : "READY";
@@ -212,46 +214,65 @@ async function buildITRExb003PdfFromRecords(params: {
     throw new Error("Report is open and includeOpen=false");
   }
 
+  // Pages are built only from real records — never from empty expected slots.
+  const presentRecords = params.expected
+    .map((chainage) => block.recordMap.get(chainage))
+    .filter((row): row is PspRecordRow => Boolean(row));
+
+  if (presentRecords.length === 0) {
+    const err = new Error("No records found for this selection");
+    (err as Error & { code?: string }).code = "NO_RECORDS";
+    throw err;
+  }
+
   const reportDate = formatDatePerth(new Date().toISOString());
-  const recordsPayload = block.expected.map((chainage) => {
-    const record = block.recordMap.get(chainage);
-    const recordedAt = record?.recorded_at ?? null;
-    const updatedAt = record?.updated_at ?? recordedAt;
-    const initialFmt = recordedAt ? formatDatePerth(recordedAt) : "";
-    const updatedFmt =
-      updatedAt != null ? formatDatePerth(updatedAt as string) : initialFmt;
-    return {
-      date: initialFmt,
-      date_initial: initialFmt,
-      date_updated: updatedFmt,
-      record_status: record
-        ? record.completed_at
-          ? "COMPLETE"
-          : "INCOMPLETE"
-        : "",
-      layers_required: record?.layers_required ?? 3,
-      ch: record ? chainage : "",
-      l1_a: record?.l1_150 ?? "",
-      l1_b: record?.l1_450 ?? "",
-      l1_c: record?.l1_750 ?? "",
-      l2_a: record?.l2_150 ?? "",
-      l2_b: record?.l2_450 ?? "",
-      l2_c: record?.l2_750 ?? "",
-      l3_a: record?.l3_150 ?? "",
-      l3_b: record?.l3_450 ?? "",
-      l3_c: record?.l3_750 ?? "",
-      l4_a: record?.l4_150 ?? "",
-      l4_b: record?.l4_450 ?? "",
-      l4_c: record?.l4_750 ?? "",
-      l5_a: record?.l5_150 ?? "",
-      l5_b: record?.l5_450 ?? "",
-      l5_c: record?.l5_750 ?? "",
-    };
-  });
+
+  const byDate = new Map<string, PspRecordRow[]>();
+  for (const record of presentRecords) {
+    const key = formatDatePerth(record.recorded_at) || "unknown";
+    const list = byDate.get(key) ?? [];
+    list.push(record);
+    byDate.set(key, list);
+  }
+
+  const recordsPayload: CompactionRecord[] = [];
+  for (const [, group] of byDate) {
+    const sorted = [...group].sort((a, b) => b.chainage - a.chainage);
+    for (const record of sorted) {
+      const recordedAt = record.recorded_at ?? null;
+      const updatedAt = record.updated_at ?? recordedAt;
+      const initialFmt = recordedAt ? formatDatePerth(recordedAt) : "";
+      const updatedFmt =
+        updatedAt != null ? formatDatePerth(updatedAt as string) : initialFmt;
+      recordsPayload.push({
+        date: initialFmt,
+        date_initial: initialFmt,
+        date_updated: updatedFmt,
+        record_status: recordStatus(record as unknown as Record<string, unknown>),
+        layers_required: record.layers_required ?? 3,
+        ch: record.chainage,
+        l1_a: record.l1_150 ?? "",
+        l1_b: record.l1_450 ?? "",
+        l1_c: record.l1_750 ?? "",
+        l2_a: record.l2_150 ?? "",
+        l2_b: record.l2_450 ?? "",
+        l2_c: record.l2_750 ?? "",
+        l3_a: record.l3_150 ?? "",
+        l3_b: record.l3_450 ?? "",
+        l3_c: record.l3_750 ?? "",
+        l4_a: record.l4_150 ?? "",
+        l4_b: record.l4_450 ?? "",
+        l4_c: record.l4_750 ?? "",
+        l5_a: record.l5_150 ?? "",
+        l5_b: record.l5_450 ?? "",
+        l5_c: record.l5_750 ?? "",
+      });
+    }
+  }
 
   let supervisorName = "";
-  for (let idx = block.expected.length - 1; idx >= 0; idx -= 1) {
-    const record = block.recordMap.get(block.expected[idx]);
+  for (let idx = presentRecords.length - 1; idx >= 0; idx -= 1) {
+    const record = presentRecords[idx];
     if (record?.site_inspector) {
       supervisorName = record.site_inspector;
       break;

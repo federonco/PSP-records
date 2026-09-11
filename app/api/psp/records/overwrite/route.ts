@@ -2,13 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { CHAINAGE_STEP } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
-  getDepthLiftPlanForChainage,
   getLayerFieldKeysForLayerCount,
-  getLayersRequired,
-  isRecordComplete,
-  resolveDepthRangesForScope,
   PSP_RECORD_DB_LAYER_COUNT,
 } from "@/lib/psp-depth";
+import { nextCompletedAt } from "@/lib/psp-status";
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
@@ -21,7 +18,6 @@ export async function POST(request: NextRequest) {
     subsectionId,
     sectionId,
     compactorSn,
-    layerCount: layerCountBody,
   } = body;
 
   const chainageNumber = Number(chainage);
@@ -49,40 +45,6 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
-  const { data: sectionRow } = await supabase
-    .from("sections")
-    .select("app_config")
-    .eq("id", unified!)
-    .maybeSingle();
-
-  const subTrim =
-    subsectionId != null && String(subsectionId).trim()
-      ? String(subsectionId).trim()
-      : null;
-  let subsectionAppConfig: unknown = null;
-  if (unified && subTrim) {
-    const { data: subRow } = await supabase
-      .from("subsections")
-      .select("section_id,app_config")
-      .eq("id", subTrim)
-      .eq("is_active", true)
-      .maybeSingle();
-    if (subRow?.section_id === unified) {
-      subsectionAppConfig = subRow.app_config;
-    }
-  }
-
-  const depthRanges = resolveDepthRangesForScope(
-    sectionRow?.app_config,
-    subsectionAppConfig,
-  );
-  const lcNum = Number(layerCountBody);
-  const layersRequired =
-    Number.isFinite(lcNum) && lcNum >= 1
-      ? Math.floor(lcNum)
-      : getLayersRequired(chainageNumber, depthRanges);
-  const depthPlan = getDepthLiftPlanForChainage(chainageNumber, depthRanges);
-  const completenessSpec = depthPlan?.activeKeys ?? layersRequired;
   const allLayerKeys = getLayerFieldKeysForLayerCount(
     PSP_RECORD_DB_LAYER_COUNT,
   );
@@ -131,6 +93,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Record not found" }, { status: 404 });
   }
 
+  const existingRow = existing as Record<string, unknown>;
+  // layers_required frozen at insert — overwrite must not change the criterion.
+  const frozenLayers =
+    Number.isFinite(Number(existingRow.layers_required)) &&
+    Number(existingRow.layers_required) >= 1
+      ? Math.floor(Number(existingRow.layers_required))
+      : 3;
+
   const compactorSnValue =
     compactorSn !== undefined && compactorSn !== null && compactorSn !== ""
       ? String(compactorSn).trim()
@@ -142,19 +112,11 @@ export async function POST(request: NextRequest) {
       : null;
 
   const mergedRecord = {
-    ...(existing as Record<string, unknown>),
+    ...existingRow,
     ...layerPayload,
-    layers_required: layersRequired,
+    layers_required: frozenLayers,
   };
-  const existingCompletedAt =
-    (existing as Record<string, unknown>).completed_at != null
-      ? String((existing as Record<string, unknown>).completed_at)
-      : null;
-  const completedAt =
-    existingCompletedAt ??
-    (isRecordComplete(mergedRecord, completenessSpec)
-      ? new Date().toISOString()
-      : null);
+  const completedAt = nextCompletedAt(existingRow, mergedRecord);
 
   const { error } = await supabase
     .from("psp_records")
@@ -163,7 +125,7 @@ export async function POST(request: NextRequest) {
       subsection_id: sub,
       site_inspector: siteInspector,
       compactor_sn: compactorSnValue || null,
-      layers_required: layersRequired,
+      layers_required: frozenLayers,
       updated_at: new Date().toISOString(),
       completed_at: completedAt,
       ...layerPayload,

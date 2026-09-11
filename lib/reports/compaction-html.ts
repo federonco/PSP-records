@@ -83,13 +83,6 @@ function layerLiftKeys(layerNum: number): [
   ];
 }
 
-function layerHasAnyLiftValue(rec: CompactionRecord, layerNum: number): boolean {
-  return layerLiftKeys(layerNum).some((k) => {
-    const v = rec[k];
-    return v !== null && v !== undefined && String(v) !== "";
-  });
-}
-
 function layersRequiredClamp(rec: CompactionRecord): number {
   const n = rec.layers_required ?? 3;
   const num = Number(n);
@@ -97,15 +90,15 @@ function layersRequiredClamp(rec: CompactionRecord): number {
 }
 
 function computeLayersToShow(padded: CompactionRecord[]): number[] {
-  const maxExpected = Math.max(1, ...padded.map(layersRequiredClamp));
-  const out: number[] = [];
-  for (let L = 1; L <= maxExpected; L += 1) {
-    const include = padded.some(
-      (r) => L <= layersRequiredClamp(r) && layerHasAnyLiftValue(r, L),
-    );
-    if (include) out.push(L);
-  }
-  return out;
+  const real = padded.filter(
+    (r) => r.ch !== null && r.ch !== undefined && String(r.ch) !== "",
+  );
+  const maxExpected = Math.max(
+    1,
+    ...real.map(layersRequiredClamp),
+    ...padded.map(layersRequiredClamp),
+  );
+  return Array.from({ length: maxExpected }, (_, i) => i + 1);
 }
 
 export function renderCompactionHTML(data: CompactionTemplateData): string {
@@ -118,13 +111,24 @@ export function renderCompactionHTML(data: CompactionTemplateData): string {
   const location = data.WORK_LOCATION ?? "";
   const areaSublot = (data as { AREA_SUBLOT?: string }).AREA_SUBLOT ?? "";
 
-  const records = data.records ?? [];
+  const records = (data.records ?? []).filter(
+    (r) => r.ch !== null && r.ch !== undefined && String(r.ch) !== "",
+  );
+  if (records.length === 0) {
+    throw new Error("No records found for this selection");
+  }
   const pageSize = 10;
   const chunks: CompactionRecord[][] = [];
-  for (let i = 0; i < Math.max(1, Math.ceil(records.length / pageSize)); i++) {
-    chunks.push(records.slice(i * pageSize, (i + 1) * pageSize));
+  for (let i = 0; i < records.length; i += pageSize) {
+    const slice = records.slice(i, i + pageSize);
+    if (slice.length > 0) chunks.push(slice);
   }
-  if (chunks.length === 0) chunks.push([]);
+  if (process.env.NODE_ENV !== "production") {
+    console.assert(
+      chunks.every((p) => p.length > 0),
+      "compaction HTML: empty page slice",
+    );
+  }
   const totalPages = chunks.length;
 
   const pageParts: string[] = [];

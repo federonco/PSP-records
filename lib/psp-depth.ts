@@ -141,8 +141,8 @@ export function getLayerFieldKeysForLayerCount(layerCount: number): string[] {
 export const PSP_RECORD_DB_LAYER_COUNT = 5 as const;
 
 /**
- * Record is COMPLETE when every required lift key has a non-null value.
- * Pass `activeKeys` from a DepthLiftPlan, or a layer count (legacy: all 3 lifts/layer).
+ * @deprecated Prefer `isRecordComplete` from `@/lib/psp-status` (uses frozen
+ * `layers_required` on the record). Kept for activeKeys-based callers.
  */
 export function isRecordComplete(
   record: Record<string, unknown>,

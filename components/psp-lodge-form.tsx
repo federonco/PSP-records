@@ -13,11 +13,9 @@
  import { useToast } from "@/components/toast";
  import { CHAINAGE_STEP, buildExpectedChainages, isChainageGridComplete, readChainageIncrement } from "@/lib/psp";
 import {
-  getDepthLiftPlanForChainage,
   getLayerFieldKeysForLayerCount,
-  resolveDepthRangesForScope,
-  type LiftSuffix,
 } from "@/lib/psp-depth";
+import { resolveLayersRequired } from "@/lib/psp-layers";
 import {
   getEffectiveLocationFields,
   LOCATION_LIST_SELECT,
@@ -213,30 +211,20 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     );
   }, [selectedSection, selectedSubsectionId]);
 
-  /** From subsection.app_config.layers_required; default 3 for backwards compat. */
-  const configuredLayersRequired = useMemo(() => {
-    const raw = selectedSubsection?.app_config?.layers_required;
-    const n = typeof raw === "number" ? raw : Number(raw);
-    if (Number.isFinite(n) && n >= 1 && n <= 5) return Math.floor(n);
-    return 3;
-  }, [selectedSubsection]);
+  /** Resolved layer count for NEW lodges; frozen on the server at insert. */
+  const resolvedLayersRequired = useMemo(() => {
+    return resolveLayersRequired({
+      subsectionAppConfig: selectedSubsection?.app_config,
+      sectionAppConfig: selectedSection?.app_config,
+      chainage: Number.isFinite(chainage) ? chainage : 0,
+    });
+  }, [selectedSubsection?.app_config, selectedSection?.app_config, chainage]);
 
   const layersLockedToConfig = Boolean(selectedSubsectionId);
 
   /** Null = no matching depth_range → show all 3 lifts per layer (current behaviour). */
-  const depthLiftPlan = useMemo(() => {
-    if (!Number.isFinite(chainage)) return null;
-    const ranges = resolveDepthRangesForScope(
-      selectedSection?.app_config,
-      selectedSubsection?.app_config,
-    );
-    return getDepthLiftPlanForChainage(chainage, ranges);
-  }, [chainage, selectedSection?.app_config, selectedSubsection?.app_config]);
-
-  const isLiftActive = (layerNum: number, suffix: LiftSuffix): boolean => {
-    if (!depthLiftPlan) return true;
-    return depthLiftPlan.activeKeys.includes(`l${layerNum}_${suffix}`);
-  };
+  // depthLiftPlan / partial-lift hiding removed: completeness is full layers
+  // per frozen layers_required (see lib/psp-status.ts).
 
   const chainageScope = useMemo((): ChainageScope | null => {
     // Grid / completeness scope only for a real subsection (or QR locked to one).
@@ -391,9 +379,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   }, [lockedEntry, sections]);
 
   useEffect(() => {
-    if (!selectedSubsectionId) return;
-    setLayerCount(configuredLayersRequired);
-  }, [selectedSubsectionId, configuredLayersRequired]);
+    setLayerCount(resolvedLayersRequired);
+  }, [selectedSubsectionId, selectedSectionId, resolvedLayersRequired]);
 
   useEffect(() => {
     setRangeComplete(false);
@@ -660,9 +647,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         const storedLc = Number(payload.layersRequired);
         const storedOk = Number.isFinite(storedLc) && storedLc >= 1;
         const fromKeys = maxLayerIndexFromLayers(incoming);
-        const nextCount = layersLockedToConfig
-          ? configuredLayersRequired
-          : Math.max(3, storedOk ? storedLc : 0, fromKeys);
+        // Existing record: honour frozen layers_required from the row.
+        const nextCount = storedOk
+          ? Math.min(5, Math.max(1, Math.floor(storedLc)))
+          : layersLockedToConfig
+            ? resolvedLayersRequired
+            : Math.max(resolvedLayersRequired, fromKeys);
         setLayerCount(nextCount);
         if (incoming) {
           setLayers((prev) => {
@@ -691,7 +681,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     unifiedSectionId,
     subsectionIdForApi,
     layersLockedToConfig,
-    configuredLayersRequired,
+    resolvedLayersRequired,
     pushToast,
     supabase,
   ]);
@@ -802,7 +792,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          subsectionId: subsectionIdForApi,
          chainage,
          siteInspector,
-         layerCount: layersLockedToConfig ? configuredLayersRequired : layerCount,
+         layerCount: layerCount,
         layers: buildLayersPayload(),
          compactorSn: (() => {
            const eff = getEffectiveLocationFields(activeLocation ?? undefined);
@@ -855,9 +845,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         });
       }
     }
-     setLayerCount(
-       layersLockedToConfig ? configuredLayersRequired : 3,
-     );
+     setLayerCount(resolvedLayersRequired);
      setLayers({});
      setInspectorSupervisorId("");
      setSignatureStrokes(null);
@@ -1244,7 +1232,6 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                     {([0, 1, 2] as const).map((liftIdx) => {
                       const suffix =
                         liftIdx === 0 ? "150" : liftIdx === 1 ? "450" : "750";
-                      if (!isLiftActive(layerNum, suffix)) return null;
                       const key = `l${layerNum}_${suffix}`;
                       const value = layers[key] ?? "";
                       const warning = layerOutOfRange(value);

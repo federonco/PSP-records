@@ -5,6 +5,7 @@ import { BLOCK_SIZE, CHAINAGE_STEP, getBlockChainages } from "@/lib/psp";
 import { type CompactionTemplateData } from "@/lib/reporting/compaction";
 import { generateCompactionPdf } from "@/lib/reporting/compaction-pdf";
 import { getPenetrometerSnForTemplate } from "@/lib/location-app-config";
+import { recordStatus } from "@/lib/psp-status";
 
 export const runtime = "nodejs";
 
@@ -324,22 +325,36 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    const templateRecords = block.expected.map((chainage) => {
-      const record = recordMap.get(chainage);
-      return {
-        date: record ? formatter.format(new Date(record.recorded_at)) : "",
-        ch: chainage,
-        l1_a: record?.l1_150 ?? "",
-        l1_b: record?.l1_450 ?? "",
-        l1_c: record?.l1_750 ?? "",
-        l2_a: record?.l2_150 ?? "",
-        l2_b: record?.l2_450 ?? "",
-        l2_c: record?.l2_750 ?? "",
-        l3_a: record?.l3_150 ?? "",
-        l3_b: record?.l3_450 ?? "",
-        l3_c: record?.l3_750 ?? "",
-      };
-    });
+    const templateRecords = block.expected
+      .map((chainage) => {
+        const record = recordMap.get(chainage);
+        if (!record) return null;
+        return {
+          date: formatter.format(new Date(record.recorded_at)),
+          date_initial: formatter.format(new Date(record.recorded_at)),
+          date_updated: formatter.format(new Date(record.recorded_at)),
+          record_status: recordStatus(
+            record as unknown as Record<string, unknown>,
+          ),
+          layers_required: 3,
+          ch: chainage,
+          l1_a: record.l1_150 ?? "",
+          l1_b: record.l1_450 ?? "",
+          l1_c: record.l1_750 ?? "",
+          l2_a: record.l2_150 ?? "",
+          l2_b: record.l2_450 ?? "",
+          l2_c: record.l2_750 ?? "",
+          l3_a: record.l3_150 ?? "",
+          l3_b: record.l3_450 ?? "",
+          l3_c: record.l3_750 ?? "",
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row != null);
+
+    if (templateRecords.length === 0) {
+      open += 1;
+      continue;
+    }
 
     const blockRecords = block.expected
       .map((chainage) => recordMap.get(chainage))
