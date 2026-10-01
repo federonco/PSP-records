@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
  import { AuthPanel } from "@/components/auth-panel";
  import { useToast } from "@/components/toast";
-import { BLOCK_SIZE, CHAINAGE_STEP, getBlockChainages } from "@/lib/psp";
+import { BLOCK_SIZE, CHAINAGE_STEP, buildDisjointChainageBlocks } from "@/lib/psp";
 import {
   getEffectiveLocationFields,
   LOCATION_LIST_SELECT,
@@ -872,33 +872,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
   };
 
   const computeBlocks = (chainages: number[]) => {
-    if (!chainages.length) return [];
-    const sorted = [...chainages].sort((a, b) => b - a);
-    if (!sorted.length) return [];
-    const max = sorted[0];
-    const totalBlocks = Math.ceil(sorted.length / 10);
-    const set = new Set(sorted);
-    const blocks: BlockInfo[] = [];
-
-    for (let index = 0; index < totalBlocks; index += 1) {
-      const blockMax = max - index * BLOCK_SIZE * CHAINAGE_STEP;
-      const expected = getBlockChainages(blockMax);
-      const start = expected[expected.length - 1];
-      const end = expected[0];
-      const recordCount = expected.filter((value) => set.has(value)).length;
-      const pending = expected.filter((value) => !set.has(value));
-      blocks.push({
-        key: `${blockMax}-${start}`,
-        index: index + 1,
-        start,
-        end,
-        expected,
-        recordCount,
-        status: recordCount === expected.length ? "READY" : "OPEN",
-        pending,
-      });
-    }
-    return blocks;
+    return buildDisjointChainageBlocks(chainages);
   };
 
   const buildChainagesFromBlock = (blockKey: string) => {
@@ -1934,10 +1908,19 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       });
       return;
     }
-    setEditRecordOpen(false);
-    router.push(
-      `/admin/record-edit?locationId=${editRecordLocationId}&chainage=${value}`,
+    const match = (recordsByLocation[editRecordLocationId] ?? []).find(
+      (row) => row.chainage === value && row.id,
     );
+    if (!match?.id) {
+      pushToast({
+        type: "error",
+        title: "Record not found",
+        message: "No saved record for that chainage.",
+      });
+      return;
+    }
+    setEditRecordOpen(false);
+    router.push(`/admin/record-edit?recordId=${match.id}`);
   };
 
   function calcDepthLiftSummary(depthM: number): {
@@ -2549,6 +2532,34 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               </div>
               <div className="mt-2 space-y-1 text-xs">
                 <p>Records: {locRecords.length}</p>
+                {locRecords.length ? (
+                  <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
+                    {[...locRecords]
+                      .sort((a, b) => b.chainage - a.chainage)
+                      .map((rec) => (
+                        <div
+                          key={rec.id ?? `${rec.unified_section_id}-${rec.chainage}`}
+                          className="flex items-center justify-between gap-2"
+                        >
+                          <span>Ch {Number(rec.chainage).toFixed(2)}</span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="min-h-[44px] px-3 text-xs"
+                            disabled={!rec.id}
+                            title={rec.id ? "Edit record" : "Record id missing"}
+                            onClick={() =>
+                              rec.id &&
+                              router.push(`/admin/record-edit?recordId=${rec.id}`)
+                            }
+                          >
+                            Edit
+                          </Button>
+                        </div>
+                      ))}
+                  </div>
+                ) : null}
                 {locationRequirement !== null ? (
                   <p>Minimum ITR required: {locationRequirement}</p>
                 ) : null}

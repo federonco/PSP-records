@@ -27,7 +27,7 @@ async function hasOnSiteBAdminRole(userId: string): Promise<boolean> {
   return (data?.length ?? 0) > 0;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
   const isAdminPath = pathname === "/admin" || pathname.startsWith("/admin/");
   const isLoginPath = pathname === "/login" || pathname.startsWith("/login/");

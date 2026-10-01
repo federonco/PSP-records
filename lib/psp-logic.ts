@@ -1,4 +1,4 @@
-import { CHAINAGE_STEP, START_CHAINAGE } from "@/lib/psp";
+import { CHAINAGE_STEP, START_CHAINAGE, buildDisjointChainageBlocks } from "@/lib/psp";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { getLayerFieldKeysForLayerCount } from "@/lib/psp-depth";
 
@@ -153,36 +153,9 @@ export function getNextChainageFromSet(
   return next;
 }
 
-export function getHistoricalBlocksFromChainages(chainages: number[]) {
-  if (!chainages.length) return [];
-
-  const sorted = [...chainages]
-    .filter((value) => Number.isFinite(value))
-    .sort((a, b) => b - a);
-
-  if (!sorted.length) return [];
-
-  const max = sorted[0];
-  const totalBlocks = Math.ceil(sorted.length / 10);
-  const set = new Set(sorted);
-  const blocks = [];
-
-  for (let index = 0; index < totalBlocks; index += 1) {
-    const blockMax = max - index * 10 * CHAINAGE_STEP;
-    const expected = Array.from({ length: 10 }, (_, idx) => blockMax - idx * CHAINAGE_STEP);
-    const recordCount = expected.filter((value) => set.has(value)).length;
-    const pending = expected.filter((value) => !set.has(value));
-    blocks.push({
-      key: `${blockMax}-${expected[expected.length - 1]}`,
-      index: index + 1,
-      start: expected[expected.length - 1],
-      end: expected[0],
-      expected,
-      recordCount,
-      status: recordCount === expected.length ? "READY" : "OPEN",
-      pending,
-    });
-  }
-
-  return blocks;
+export function getHistoricalBlocksFromChainages(
+  chainages: number[],
+  isComplete?: (chainage: number) => boolean,
+) {
+  return buildDisjointChainageBlocks(chainages, isComplete);
 }

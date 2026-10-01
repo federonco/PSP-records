@@ -6,15 +6,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { AuthPanel } from "@/components/auth-panel";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { getBrowserAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type RecordRow = {
   id: string;
@@ -48,10 +40,6 @@ export default function RecordsPage() {
   const [authEmail, setAuthEmail] = useState<string | null>(null);
   const [records, setRecords] = useState<RecordRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedRecord, setSelectedRecord] = useState<RecordRow | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [editInspector, setEditInspector] = useState("");
-  const [editLayers, setEditLayers] = useState<Record<string, string>>({});
 
   useEffect(() => {
     void supabase.auth.getSession().then(
@@ -166,77 +154,6 @@ export default function RecordsPage() {
 
   const rows = useMemo(() => records, [records]);
 
-  const openEditor = (row: RecordRow) => {
-    setSelectedRecord(row);
-    setEditInspector(row.site_inspector ?? "");
-    setEditLayers({
-      l1_150: String(row.l1_150 ?? ""),
-      l1_450: String(row.l1_450 ?? ""),
-      l1_750: String(row.l1_750 ?? ""),
-      l2_150: String(row.l2_150 ?? ""),
-      l2_450: String(row.l2_450 ?? ""),
-      l2_750: String(row.l2_750 ?? ""),
-      l3_150: String(row.l3_150 ?? ""),
-      l3_450: String(row.l3_450 ?? ""),
-      l3_750: String(row.l3_750 ?? ""),
-    });
-  };
-
-  const handleConfirm = async () => {
-    if (!selectedRecord) return;
-    setSaving(true);
-    const payload = {
-      unifiedSectionId: sectionId,
-      subsectionId: subsectionId ?? selectedRecord.subsection_id ?? null,
-      chainage: selectedRecord.chainage,
-      siteInspector: editInspector.trim(),
-      layers: {
-        l1_150: Number(editLayers.l1_150),
-        l1_450: Number(editLayers.l1_450),
-        l1_750: Number(editLayers.l1_750),
-        l2_150: Number(editLayers.l2_150),
-        l2_450: Number(editLayers.l2_450),
-        l2_750: Number(editLayers.l2_750),
-        l3_150: Number(editLayers.l3_150),
-        l3_450: Number(editLayers.l3_450),
-        l3_750: Number(editLayers.l3_750),
-      },
-    };
-    const token = await getBrowserAccessToken();
-    const response = await fetch("/api/psp/records/overwrite", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-    setSaving(false);
-    if (!response.ok) return;
-    setSelectedRecord(null);
-    setLoading(true);
-    let query = supabase
-      .from("psp_records")
-      .select(
-        "id, chainage, recorded_at, unified_section_id, subsection_id, location_id, site_inspector, sign_off_by, sign_off_at, l1_150, l1_450, l1_750, l2_150, l2_450, l2_750, l3_150, l3_450, l3_750, compactor_sn",
-      )
-      .eq("unified_section_id", sectionId)
-      .order("chainage", { ascending: false });
-    query = subsectionId ? query.eq("subsection_id", subsectionId) : query.is("subsection_id", null);
-    if (!subsectionId) {
-      query = supabase
-        .from("psp_records")
-        .select(
-          "id, chainage, recorded_at, unified_section_id, subsection_id, location_id, site_inspector, sign_off_by, sign_off_at, l1_150, l1_450, l1_750, l2_150, l2_450, l2_750, l3_150, l3_450, l3_750, compactor_sn",
-        )
-        .eq("unified_section_id", sectionId)
-        .order("chainage", { ascending: false });
-    }
-    const { data } = await query;
-    setRecords((data ?? []) as RecordRow[]);
-    setLoading(false);
-  };
-
   if (!authEmail) {
     return (
       <div className="psp-page">
@@ -286,12 +203,8 @@ export default function RecordsPage() {
                     <td className="px-3 py-2">{row.site_inspector ?? "—"}</td>
                     <td className="px-3 py-2">{row.sign_off_by ?? "—"}</td>
                     <td className="px-3 py-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditor(row)}
-                      >
-                        Edit
+                      <Button asChild variant="outline" size="sm" className="min-h-[44px]">
+                        <Link href={`/admin/record-edit?recordId=${row.id}`}>Edit</Link>
                       </Button>
                     </td>
                   </tr>
@@ -302,71 +215,6 @@ export default function RecordsPage() {
         )}
       </div>
 
-      <Dialog
-        open={selectedRecord != null}
-        onOpenChange={(open) => {
-          if (!open) setSelectedRecord(null);
-        }}
-      >
-        <DialogContent className="psp-outer max-w-[520px] p-0">
-          <DialogHeader>
-            <DialogTitle className="px-5 pt-5 text-base font-semibold text-[var(--ink)]">
-              Record detail
-            </DialogTitle>
-          </DialogHeader>
-          {selectedRecord ? (
-            <div className="space-y-3 px-5 pb-4 text-sm">
-              <div className="psp-outer">
-                <div className="grid grid-cols-2 gap-2 text-[11px] text-[var(--muted-foreground)]">
-                  <p>Chainage: <span className="font-medium text-[var(--ink)]">{selectedRecord.chainage}</span></p>
-                  <p>Date: <span className="font-medium text-[var(--ink)]">{selectedRecord.recorded_at ? new Date(selectedRecord.recorded_at).toLocaleString() : "—"}</span></p>
-                  <p>Inspector: <span className="font-medium text-[var(--ink)]">{selectedRecord.site_inspector ?? "—"}</span></p>
-                  <p>Sign-off: <span className="font-medium text-[var(--ink)]">{selectedRecord.sign_off_by ?? "—"}</span></p>
-                </div>
-              </div>
-              <div className="psp-outer">
-                <div className="psp-section-label mb-2">Edit values</div>
-                <Input
-                  value={editInspector}
-                  onChange={(e) => setEditInspector(e.target.value)}
-                  placeholder="Inspector"
-                  className="psp-input mb-2 bg-[var(--inner-bg)]"
-                />
-                <div className="grid grid-cols-2 gap-2">
-                {Object.keys(editLayers).map((key) => (
-                  <Input
-                    key={key}
-                    type="number"
-                    min={0}
-                    max={35}
-                    value={editLayers[key]}
-                    onChange={(e) => setEditLayers((prev) => ({ ...prev, [key]: e.target.value }))}
-                    placeholder={key}
-                    className="psp-input bg-[var(--inner-bg)]"
-                  />
-                ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <DialogFooter className="border-t border-[var(--border)] px-5 py-3">
-            <Button
-              variant="outline"
-              className="psp-button psp-button-ghost h-9"
-              onClick={() => setSelectedRecord(null)}
-            >
-              Close
-            </Button>
-            <Button
-              className="psp-button psp-button-primary h-9 px-4"
-              onClick={handleConfirm}
-              disabled={saving}
-            >
-              {saving ? "Saving..." : "Confirm"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

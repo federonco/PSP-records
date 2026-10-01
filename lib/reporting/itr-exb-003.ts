@@ -175,13 +175,11 @@ function buildCompactionBlockInfo(params: {
   params.records.forEach((record) => {
     recordMap.set(record.chainage, record);
   });
-  const pending =
-    params.pendingChainages ??
-    params.expected.filter((chainage) => {
-      const record = recordMap.get(chainage);
-      if (!record) return true;
-      return !isRecordComplete(record as unknown as Record<string, unknown>);
-    });
+  const pending = params.expected.filter((chainage) => {
+    const record = recordMap.get(chainage);
+    if (!record) return true;
+    return !isRecordComplete(record as unknown as Record<string, unknown>);
+  });
   const status =
     params.reportStatus === "OPEN" || pending.length > 0 ? "OPEN" : "READY";
   return {

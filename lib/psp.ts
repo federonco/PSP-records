@@ -26,6 +26,52 @@ export function getBlockChainages(maxChainage: number) {
   return chainages;
 }
 
+export type DisjointChainageBlock = {
+  index: number;
+  key: string;
+  start: number;
+  end: number;
+  expected: number[];
+  pending: number[];
+  recordCount: number;
+  status: "READY" | "OPEN";
+};
+
+/**
+ * Partition real chainages into disjoint pages of BLOCK_SIZE.
+ * Each page starts at the next chainage after the previous page ends.
+ * No arithmetic padding past the data, so a chainage appears once.
+ * Pending is the chainages in that page whose own record is incomplete.
+ */
+export function buildDisjointChainageBlocks(
+  chainages: number[],
+  isComplete?: (chainage: number) => boolean,
+): DisjointChainageBlock[] {
+  const unique = [...new Set(chainages.filter((value) => Number.isFinite(value)))].sort(
+    (a, b) => b - a,
+  );
+  const blocks: DisjointChainageBlock[] = [];
+  for (let offset = 0, index = 1; offset < unique.length; offset += BLOCK_SIZE, index += 1) {
+    const expected = unique.slice(offset, offset + BLOCK_SIZE);
+    const end = expected[0];
+    const start = expected[expected.length - 1];
+    const pending = isComplete
+      ? expected.filter((chainage) => !isComplete(chainage))
+      : [];
+    blocks.push({
+      index,
+      key: `${end}-${start}`,
+      start,
+      end,
+      expected,
+      pending,
+      recordCount: expected.length,
+      status: pending.length > 0 ? "OPEN" : "READY",
+    });
+  }
+  return blocks;
+}
+
 /** Explicit `app_config.chainage_increment`; null when missing/invalid (no silent default). */
 export function readChainageIncrement(appConfig: unknown): number | null {
   if (!appConfig || typeof appConfig !== "object" || Array.isArray(appConfig)) {

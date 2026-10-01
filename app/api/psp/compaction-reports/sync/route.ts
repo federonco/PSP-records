@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnSiteBAdmin } from "@/lib/admin";
 import { getSupabaseServer } from "@/lib/supabase/server";
-import { BLOCK_SIZE, CHAINAGE_STEP, getBlockChainages } from "@/lib/psp";
+import { buildDisjointChainageBlocks } from "@/lib/psp";
 import { type CompactionTemplateData } from "@/lib/reporting/compaction";
 import { generateCompactionPdf } from "@/lib/reporting/compaction-pdf";
 import { getPenetrometerSnForTemplate } from "@/lib/location-app-config";
-import { recordStatus } from "@/lib/psp-status";
+import { recordStatus, isRecordComplete } from "@/lib/psp-status";
 
 export const runtime = "nodejs";
 
@@ -14,15 +14,22 @@ const ONSITE_B_APP = "onsite-b";
 type RecordRow = {
   chainage: number;
   recorded_at: string;
-  l1_150: number;
-  l1_450: number;
-  l1_750: number;
-  l2_150: number;
-  l2_450: number;
-  l2_750: number;
-  l3_150: number;
-  l3_450: number;
-  l3_750: number;
+  layers_required: number | null;
+  l1_150: number | null;
+  l1_450: number | null;
+  l1_750: number | null;
+  l2_150: number | null;
+  l2_450: number | null;
+  l2_750: number | null;
+  l3_150: number | null;
+  l3_450: number | null;
+  l3_750: number | null;
+  l4_150: number | null;
+  l4_450: number | null;
+  l4_750: number | null;
+  l5_150: number | null;
+  l5_450: number | null;
+  l5_750: number | null;
   site_inspector: string;
 };
 
@@ -43,33 +50,25 @@ type BlockInfo = {
   status: "READY" | "OPEN";
 };
 
-function computeBlocks(chainages: number[]) {
-  if (!chainages.length) return [];
-  const sorted = [...chainages].sort((a, b) => b - a);
-  const max = sorted[0];
-  const totalBlocks = Math.ceil(sorted.length / BLOCK_SIZE);
-  const set = new Set(sorted);
-  const blocks: BlockInfo[] = [];
-
-  for (let index = 0; index < totalBlocks; index += 1) {
-    const blockMax = max - index * BLOCK_SIZE * CHAINAGE_STEP;
-    const expected = getBlockChainages(blockMax);
-    const start = expected[expected.length - 1];
-    const end = expected[0];
-    const recordCount = expected.filter((value) => set.has(value)).length;
-    const pending = expected.filter((value) => !set.has(value));
-    blocks.push({
-      index: index + 1,
-      blockKey: `${blockMax}-${start}`,
-      start,
-      end,
-      expected,
-      recordCount,
-      pending,
-      status: recordCount === expected.length ? "READY" : "OPEN",
-    });
+function computeBlocks(records: RecordRow[]): BlockInfo[] {
+  const byChainage = new Map<number, RecordRow>();
+  for (const row of records) {
+    byChainage.set(Number(row.chainage), row);
   }
-  return blocks;
+  return buildDisjointChainageBlocks([...byChainage.keys()], (chainage) => {
+    const row = byChainage.get(chainage);
+    if (!row) return false;
+    return isRecordComplete(row as unknown as Record<string, unknown>);
+  }).map((block) => ({
+    index: block.index,
+    blockKey: block.key,
+    start: block.start,
+    end: block.end,
+    expected: block.expected,
+    recordCount: block.recordCount,
+    pending: block.pending,
+    status: block.status,
+  }));
 }
 
 export async function POST(request: NextRequest) {
@@ -208,7 +207,7 @@ export async function POST(request: NextRequest) {
   });
 
   let recordsQuery = supabase.from("psp_records").select(
-    "recorded_at,chainage,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,site_inspector",
+    "recorded_at,chainage,layers_required,l1_150,l1_450,l1_750,l2_150,l2_450,l2_750,l3_150,l3_450,l3_750,l4_150,l4_450,l4_750,l5_150,l5_450,l5_750,site_inspector",
   );
 
   if (locationId) {
@@ -250,7 +249,7 @@ export async function POST(request: NextRequest) {
   }
 
   const recordList = (records ?? []) as RecordRow[];
-  const blocks = computeBlocks(recordList.map((row) => row.chainage));
+  const blocks = computeBlocks(recordList);
 
   console.log(
     "[SYNC] blocks computed:",
