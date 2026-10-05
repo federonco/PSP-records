@@ -43,6 +43,66 @@ export type DisjointChainageBlock = {
  * No arithmetic padding past the data, so a chainage appears once.
  * Pending is the chainages in that page whose own record is incomplete.
  */
+/** Parse `hi-lo` block_key into inclusive chainage span (hi >= lo). */
+export function spanFromBlockKey(
+  blockKey: string,
+): { hi: number; lo: number } | null {
+  const parts = String(blockKey ?? "").split("-");
+  if (parts.length < 2) return null;
+  const a = Number(parts[0]);
+  const b = Number(parts[parts.length - 1]);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  return { hi: Math.max(a, b), lo: Math.min(a, b) };
+}
+
+function spansOverlap(
+  a: { hi: number; lo: number },
+  b: { hi: number; lo: number },
+): boolean {
+  return a.lo <= b.hi && b.lo <= a.hi;
+}
+
+/**
+ * Within each section/subsection scope, drop older reports that overlap a
+ * newer one. Prefer recent data when block ranges collide.
+ */
+export function preferRecentNonOverlappingReports<
+  T extends {
+    block_key: string;
+    created_at?: string | null;
+    unified_section_id?: string | null;
+    subsection_id?: string | null;
+  },
+>(reports: T[]): T[] {
+  const byScope = new Map<string, T[]>();
+  for (const report of reports) {
+    const scope = `${report.unified_section_id ?? ""}|${report.subsection_id ?? ""}`;
+    const list = byScope.get(scope) ?? [];
+    list.push(report);
+    byScope.set(scope, list);
+  }
+  const kept: T[] = [];
+  for (const list of byScope.values()) {
+    const ordered = [...list].sort((a, b) => {
+      const ta = Date.parse(String(a.created_at ?? "")) || 0;
+      const tb = Date.parse(String(b.created_at ?? "")) || 0;
+      return tb - ta;
+    });
+    const accepted: { hi: number; lo: number }[] = [];
+    for (const report of ordered) {
+      const span = spanFromBlockKey(report.block_key);
+      if (!span) {
+        kept.push(report);
+        continue;
+      }
+      if (accepted.some((other) => spansOverlap(span, other))) continue;
+      accepted.push(span);
+      kept.push(report);
+    }
+  }
+  return kept;
+}
+
 export function buildDisjointChainageBlocks(
   chainages: number[],
   isComplete?: (chainage: number) => boolean,

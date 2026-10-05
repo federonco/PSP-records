@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
  import { AuthPanel } from "@/components/auth-panel";
  import { useToast } from "@/components/toast";
-import { BLOCK_SIZE, CHAINAGE_STEP, buildDisjointChainageBlocks } from "@/lib/psp";
+import {
+  BLOCK_SIZE,
+  CHAINAGE_STEP,
+  buildDisjointChainageBlocks,
+  preferRecentNonOverlappingReports,
+} from "@/lib/psp";
 import {
   getEffectiveLocationFields,
   LOCATION_LIST_SELECT,
@@ -157,6 +162,7 @@ type CompactionReportRow = {
   location_id: string | null;
   unified_section_id?: string | null;
   subsection_id?: string | null;
+  created_at?: string | null;
 };
 
  type BlockInfo = {
@@ -662,7 +668,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
       return;
     }
     const selectCols =
-      "id,status,block_key,block_index,pending_chainages,pdf_path,location_id,unified_section_id,subsection_id";
+      "id,status,block_key,block_index,pending_chainages,pdf_path,location_id,unified_section_id,subsection_id,created_at";
     const byLocPromise = safeIds.length
       ? supabase
           .from("psp_reports")
@@ -716,7 +722,7 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
             (r.subsection_id ?? null) === (report.subsection_id ?? null),
         ),
     );
-    setCompactionReports(dedupedReports);
+    setCompactionReports(preferRecentNonOverlappingReports(dedupedReports));
   };
 
   useEffect(() => {
@@ -2532,34 +2538,6 @@ function locationIdFromSubAppConfig(app_config: unknown): string | null {
               </div>
               <div className="mt-2 space-y-1 text-xs">
                 <p>Records: {locRecords.length}</p>
-                {locRecords.length ? (
-                  <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                    {[...locRecords]
-                      .sort((a, b) => b.chainage - a.chainage)
-                      .map((rec) => (
-                        <div
-                          key={rec.id ?? `${rec.unified_section_id}-${rec.chainage}`}
-                          className="flex items-center justify-between gap-2"
-                        >
-                          <span>Ch {Number(rec.chainage).toFixed(2)}</span>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="min-h-[44px] px-3 text-xs"
-                            disabled={!rec.id}
-                            title={rec.id ? "Edit record" : "Record id missing"}
-                            onClick={() =>
-                              rec.id &&
-                              router.push(`/admin/record-edit?recordId=${rec.id}`)
-                            }
-                          >
-                            Edit
-                          </Button>
-                        </div>
-                      ))}
-                  </div>
-                ) : null}
                 {locationRequirement !== null ? (
                   <p>Minimum ITR required: {locationRequirement}</p>
                 ) : null}

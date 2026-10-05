@@ -268,6 +268,24 @@ export async function POST(request: NextRequest) {
   const reportMap = new Map(
     (existingReports ?? []).map((row) => [row.block_key, row as ReportRow]),
   );
+  const keepKeys = new Set(blocks.map((block) => block.blockKey));
+  const staleReports = (existingReports ?? []).filter(
+    (row) => !keepKeys.has(row.block_key),
+  );
+  if (staleReports.length) {
+    const staleIds = staleReports.map((row) => row.id).filter(Boolean);
+    const { error: pruneError } = await supabase
+      .from("psp_reports")
+      .delete()
+      .in("id", staleIds);
+    if (pruneError) {
+      console.error("[sync] prune stale reports error:", pruneError);
+      return NextResponse.json({ error: pruneError.message }, { status: 500 });
+    }
+    for (const row of staleReports) {
+      reportMap.delete(row.block_key);
+    }
+  }
 
   const formatter = new Intl.DateTimeFormat("en-GB", {
     timeZone: "Australia/Perth",
