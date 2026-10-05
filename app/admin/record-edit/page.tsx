@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { ConfirmButton } from "@/components/confirm-button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { X } from "lucide-react";
 
 type ReadingMap = Record<string, string>;
@@ -65,10 +72,6 @@ function layerComplete(readings: ReadingMap, layer: number) {
   return suffixes.every((suffix) => readings[key(layer, suffix)] !== "");
 }
 
-function topHasReading(readings: ReadingMap, layer: number) {
-  return suffixes.some((suffix) => readings[key(layer, suffix)] !== "");
-}
-
 function RecordEditContent() {
   const router = useRouter();
   const { pushToast } = useToast();
@@ -82,6 +85,10 @@ function RecordEditContent() {
   const [reason, setReason] = useState("");
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [pendingDrop, setPendingDrop] = useState<{
+    layer: number;
+    lost: string[];
+  } | null>(null);
 
   const load = async (id: string) => {
     setLoading(true);
@@ -118,39 +125,40 @@ function RecordEditContent() {
   }, [recordId]);
 
   const signed = Boolean(record?.sign_off_at);
-  const emptyTop = (() => {
-    let next = layersRequired;
-    while (next > 1 && !topHasReading(readings, next)) next -= 1;
-    return next;
-  })();
+  const layersDirty = layersRequired !== savedLayers;
 
-  const applyDrop = (nextRequired: number) => {
-    const next = { ...readings };
-    for (let layer = nextRequired + 1; layer <= layersRequired; layer += 1) {
+  const applyRemoveLayer = (layerNum: number) => {
+    if (layerNum < 1 || layerNum > layersRequired || layersRequired <= 1) return;
+    const next: ReadingMap = { ...readings };
+    for (let layer = layerNum; layer < layersRequired; layer += 1) {
+      for (const suffix of suffixes) {
+        next[key(layer, suffix)] = readings[key(layer + 1, suffix)] ?? "";
+      }
+    }
+    for (const suffix of suffixes) {
+      next[key(layersRequired, suffix)] = "";
+    }
+    for (let layer = layersRequired + 1; layer <= 5; layer += 1) {
       for (const suffix of suffixes) next[key(layer, suffix)] = "";
     }
     setReadings(next);
-    setLayersRequired(nextRequired);
+    setLayersRequired(layersRequired - 1);
+    setPendingDrop(null);
   };
 
-  const requestDrop = (nextRequired: number) => {
+  const requestRemoveLayer = (layerNum: number) => {
+    if (layerNum < 1 || layerNum > layersRequired || layersRequired <= 1) return;
     const lost: string[] = [];
-    for (let layer = nextRequired + 1; layer <= layersRequired; layer += 1) {
-      for (const suffix of suffixes) {
-        const value = readings[key(layer, suffix)];
-        if (value !== "") lost.push(`Layer ${layer} ${suffix}: ${value}`);
-      }
+    for (const suffix of suffixes) {
+      const value = readings[key(layerNum, suffix)];
+      if (value !== "") lost.push(`Layer ${layerNum} · ${suffix}: ${value}`);
     }
-    if (lost.length) {
-      const ok = window.confirm(`Remove layer readings?\n${lost.join("\n")}`);
-      if (!ok) return;
-    } else {
-      const ok = window.confirm(
-        `Remove empty layers ${nextRequired + 1}–${layersRequired}. Layer count becomes ${nextRequired}.`,
-      );
-      if (!ok) return;
-    }
-    applyDrop(nextRequired);
+    setPendingDrop({ layer: layerNum, lost });
+  };
+
+  const confirmDrop = () => {
+    if (!pendingDrop) return;
+    applyRemoveLayer(pendingDrop.layer);
   };
 
   const save = async () => {
@@ -294,11 +302,16 @@ function RecordEditContent() {
                 <p className="text-xs text-[var(--muted-foreground)]">
                   {layersRequired} layer block(s)
                 </p>
+                {layersDirty ? (
+                  <p className="rounded-[12px] border border-[#F3E3B0] bg-[#FFF6DB] px-3 py-2 text-xs text-[#9A6B00]">
+                    Layer count is {layersRequired} (was {savedLayers}). Tap Save to apply this
+                    chainage config.
+                  </p>
+                ) : null}
                 <div className="grid gap-3">
                   {Array.from({ length: layersRequired }, (_, index) => index).map((layerIndex) => {
                     const layer = layerIndex + 1;
-                    const isTop = layer === layersRequired;
-                    const canDelete = isTop && layersRequired > 1;
+                    const canDelete = layersRequired > 1;
                     return (
                       <div
                         key={layer}
@@ -316,10 +329,8 @@ function RecordEditContent() {
                               variant="ghost"
                               size="icon"
                               className="size-8 shrink-0 text-[var(--muted-foreground)]"
-                              title="Remove this layer"
-                              onClick={() =>
-                                requestDrop(isTop && !topHasReading(readings, layer) ? emptyTop : layer - 1)
-                              }
+                              title={`Remove layer ${layer}`}
+                              onClick={() => requestRemoveLayer(layer)}
                               aria-label={`Remove layer ${layer}`}
                             >
                               <X className="h-4 w-4" />
@@ -357,11 +368,11 @@ function RecordEditContent() {
                       type="button"
                       variant="outline"
                       className="w-full border-dashed"
-                      disabled={layersRequired >= 5 || layersRequired !== savedLayers}
+                      disabled={layersRequired >= 5 || layersDirty}
                       title={
                         layersRequired >= 5
                           ? "Maximum 5 layers"
-                          : layersRequired !== savedLayers
+                          : layersDirty
                             ? "Save the current layer change first"
                             : "Add a layer"
                       }
@@ -405,7 +416,7 @@ function RecordEditContent() {
 
             <ConfirmButton
               variant="ghost"
-              label="Save"
+              label={layersDirty ? `Save (${layersRequired} layers)` : "Save"}
               confirmLabel="CONFIRM?"
               onConfirm={() => void save()}
               disabled={loading || (signed && !reason.trim())}
@@ -422,6 +433,59 @@ function RecordEditContent() {
               className="w-full min-h-11 border-[var(--danger)] text-[var(--danger)]"
               confirmClassName="psp-button-warning"
             />
+
+            <Dialog
+              open={pendingDrop != null}
+              onOpenChange={(open) => {
+                if (!open) setPendingDrop(null);
+              }}
+            >
+              <DialogContent className="max-w-[420px]">
+                <DialogHeader>
+                  <DialogTitle>Remove layer?</DialogTitle>
+                </DialogHeader>
+                {pendingDrop ? (
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      Remove layer {pendingDrop.layer}. Higher layers move down.
+                      Count goes from {layersRequired} to {layersRequired - 1}.
+                      Save afterwards to keep this config for the chainage.
+                    </p>
+                    {pendingDrop.lost.length ? (
+                      <div className="rounded-[12px] border border-[var(--border)] bg-[var(--surface-alt)] p-3 text-xs">
+                        <p className="mb-1 font-semibold">Readings to clear:</p>
+                        <ul className="list-disc space-y-0.5 pl-4">
+                          {pendingDrop.lost.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-[var(--muted-foreground)]">
+                        This layer is empty.
+                      </p>
+                    )}
+                  </div>
+                ) : null}
+                <DialogFooter className="gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="min-h-[44px]"
+                    onClick={() => setPendingDrop(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    className="min-h-[44px] bg-[var(--danger)] text-white hover:bg-[var(--danger)]/90"
+                    onClick={confirmDrop}
+                  >
+                    Remove
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             <Card className="psp-card">
               <CardHeader className="pb-2">

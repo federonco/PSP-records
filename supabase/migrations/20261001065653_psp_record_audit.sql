@@ -112,10 +112,14 @@ begin
     if jsonb_typeof(v_val) = 'null' then
       continue;
     end if;
-    if jsonb_typeof(v_val) <> 'number' or v_val::text !~ '^-?[0-9]+$' then
+    if jsonb_typeof(v_val) <> 'number' then
       raise exception 'psp_record_invalid_readings' using errcode = '22023';
     end if;
-    v_int := v_val::text::int;
+    begin
+      v_int := (p_readings->>v_key)::numeric::int;
+    exception when others then
+      raise exception 'psp_record_invalid_readings' using errcode = '22023';
+    end;
     if v_int < 0 or v_int > 35 then
       raise exception 'psp_record_invalid_readings' using errcode = '22023';
     end if;
@@ -134,7 +138,7 @@ begin
       elsif p_readings ? v_key and jsonb_typeof(p_readings->v_key) = 'null' then
         v_next := v_next || jsonb_build_object(v_key, null);
       elsif p_readings ? v_key then
-        v_next := v_next || jsonb_build_object(v_key, (p_readings->>v_key)::int);
+        v_next := v_next || jsonb_build_object(v_key, (p_readings->>v_key)::numeric::int);
       else
         v_next := v_next || jsonb_build_object(v_key, v_cur->v_key);
       end if;

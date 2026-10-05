@@ -50,13 +50,6 @@ function readingValue(raw: unknown): { ok: true; value: number | null } | { ok: 
   return { ok: false };
 }
 
-function layerHasReading(
-  readings: Record<string, number | null>,
-  layer: number,
-): boolean {
-  return LIFT_SUFFIXES.some((suffix) => readings[layerKey(layer, suffix)] != null);
-}
-
 export function validatePspRecordEdit(
   existing: PspEditExisting,
   input: PspEditInput,
@@ -87,18 +80,6 @@ export function validatePspRecordEdit(
       }
       readings[key] = layer > input.layersRequired ? null : parsed.value;
       if (layer > input.layersRequired && parsed.value != null) {
-        return {
-          ok: false,
-          status: 400,
-          error: "Remove the highest layer first. A lower layer cannot be deleted while a higher one has readings.",
-        };
-      }
-    }
-  }
-
-  if (input.layersRequired < current) {
-    for (let layer = input.layersRequired + 1; layer <= current; layer += 1) {
-      if (layerHasReading(readings, layer) || layerHasReading(input.readings as Record<string, number | null>, layer)) {
         return {
           ok: false,
           status: 400,
