@@ -258,12 +258,16 @@ export async function POST(request: NextRequest) {
     recordList.map((r) => r.chainage),
   );
 
-  const { data: existingReports } = await supabase
+  let existingQuery = supabase
     .from("psp_reports")
     .select("id,block_key,pdf_path,block_index,unified_section_id,subsection_id")
     .eq("report_type", "compaction")
-    .eq("unified_section_id", unified_section_id)
-    .eq("subsection_id", subsection_id);
+    .eq("unified_section_id", unified_section_id);
+  existingQuery =
+    subsection_id == null
+      ? existingQuery.is("subsection_id", null)
+      : existingQuery.eq("subsection_id", subsection_id);
+  const { data: existingReports } = await existingQuery;
 
   const reportMap = new Map(
     (existingReports ?? []).map((row) => [row.block_key, row as ReportRow]),

@@ -7,6 +7,7 @@ import {
   generateITRExb003PdfForCompactionReport,
   resolvePspLocation,
 } from "@/lib/reporting/itr-exb-003";
+import { preferRecentNonOverlappingReports } from "@/lib/psp";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -85,11 +86,12 @@ export async function POST(request: NextRequest) {
       reportsQuery = reportsQuery.is("subsection_id", null);
     }
 
-    const { data: reports, error: reportsError } = await reportsQuery;
+    const { data: reportsRaw, error: reportsError } = await reportsQuery;
     if (reportsError) {
       return NextResponse.json({ error: reportsError.message }, { status: 500 });
     }
-    if (!reports || reports.length === 0) {
+    const reports = preferRecentNonOverlappingReports(reportsRaw ?? []);
+    if (!reports.length) {
       return NextResponse.json({ error: "No ready reports found" }, { status: 404 });
     }
 
