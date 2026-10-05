@@ -4,7 +4,9 @@ import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   getNextChainageFromSet,
   resolveLocationId,
+  resolveTravelDirection,
 } from "@/lib/psp-logic";
+import { CHAINAGE_STEP } from "@/lib/psp";
 
 export async function GET(request: NextRequest) {
   const { token } = await getUserFromRequest(request);
@@ -53,41 +55,61 @@ export async function GET(request: NextRequest) {
 
   let direction: "backwards" | "onwards" = "backwards";
   let startChainage: number | null = null;
+  let endChainage: number | null = null;
 
-  if (resolvedLocationId) {
-    const { data: locationRow } = await supabase
-      .from("locations")
-      .select("direction,start_chainage")
-      .eq("location_type", "psp")
-      .eq("id", resolvedLocationId)
-      .maybeSingle();
-
-    direction =
-      locationRow?.direction === "onwards" ? "onwards" : "backwards";
-    startChainage =
-      typeof locationRow?.start_chainage === "number"
-        ? Number(locationRow.start_chainage)
-        : locationRow?.start_chainage != null
-          ? Number(locationRow.start_chainage)
-          : null;
-  } else if (subsectionId) {
+  // Direction from subsection or section span (start_ch vs end_ch), not locations.
+  if (subsectionId) {
     const { data: subRow } = await supabase
       .from("subsections")
-      .select("direction, start_ch")
+      .select("direction, start_ch, end_ch")
       .eq("id", subsectionId)
       .maybeSingle();
-    direction = subRow?.direction === "onwards" ? "onwards" : "backwards";
     startChainage =
-      subRow?.start_ch != null ? Number(subRow.start_ch) : null;
+      subRow?.start_ch != null && Number.isFinite(Number(subRow.start_ch))
+        ? Number(subRow.start_ch)
+        : null;
+    endChainage =
+      subRow?.end_ch != null && Number.isFinite(Number(subRow.end_ch))
+        ? Number(subRow.end_ch)
+        : null;
+    direction = resolveTravelDirection(
+      subRow?.direction as string | null,
+      startChainage,
+      endChainage,
+    );
   } else {
     const { data: secRow } = await supabase
       .from("sections")
-      .select("direction, start_ch")
+      .select("direction, start_ch, end_ch")
       .eq("id", unifiedSectionId)
       .maybeSingle();
-    direction = secRow?.direction === "onwards" ? "onwards" : "backwards";
     startChainage =
-      secRow?.start_ch != null ? Number(secRow.start_ch) : null;
+      secRow?.start_ch != null && Number.isFinite(Number(secRow.start_ch))
+        ? Number(secRow.start_ch)
+        : null;
+    endChainage =
+      secRow?.end_ch != null && Number.isFinite(Number(secRow.end_ch))
+        ? Number(secRow.end_ch)
+        : null;
+    direction = resolveTravelDirection(
+      secRow?.direction as string | null,
+      startChainage,
+      endChainage,
+    );
+  }
+
+  if (startChainage == null && resolvedLocationId) {
+    const { data: locationRow } = await supabase
+      .from("locations")
+      .select("start_chainage")
+      .eq("location_type", "psp")
+      .eq("id", resolvedLocationId)
+      .maybeSingle();
+    startChainage =
+      locationRow?.start_chainage != null &&
+      Number.isFinite(Number(locationRow.start_chainage))
+        ? Number(locationRow.start_chainage)
+        : null;
   }
 
   const chainageList = (data ?? []).map((row) => Number(row.chainage));
@@ -96,5 +118,9 @@ export async function GET(request: NextRequest) {
     direction,
     startChainage,
   );
-  return NextResponse.json({ chainage });
+  return NextResponse.json({
+    chainage,
+    direction,
+    step: direction === "onwards" ? CHAINAGE_STEP : -CHAINAGE_STEP,
+  });
 }

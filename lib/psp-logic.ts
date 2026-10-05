@@ -127,6 +127,25 @@ export function validateSaveData(
   return { ok: true as const, clean };
 }
 
+/** Travel direction for next-chainage: prefer start_ch vs end_ch span. */
+export function resolveTravelDirection(
+  direction: string | null | undefined,
+  startCh?: number | null,
+  endCh?: number | null,
+): "backwards" | "onwards" {
+  const start = startCh != null ? Number(startCh) : NaN;
+  const end = endCh != null ? Number(endCh) : NaN;
+  if (Number.isFinite(start) && Number.isFinite(end) && start !== end) {
+    return start > end ? "backwards" : "onwards";
+  }
+  const d = String(direction ?? "")
+    .trim()
+    .toLowerCase();
+  if (d === "onwards" || d === "onward") return "onwards";
+  if (d === "backwards" || d === "backward") return "backwards";
+  return "backwards";
+}
+
 /** @param chainages Lodge order: most recent first (`recorded_at` DESC). */
 export function getNextChainageFromSet(
   chainages: number[],
@@ -140,12 +159,14 @@ export function getNextChainageFromSet(
     return typeof startChainage === "number" ? startChainage : START_CHAINAGE;
   }
 
-  // With records: last lodged ± step
-  const lastLodged = numeric[0];
+  // Progress from the extreme in the travel direction, not only last timestamp.
+  // onwards → continue past the highest lodged; backwards → past the lowest.
+  const anchor =
+    direction === "onwards" ? Math.max(...numeric) : Math.min(...numeric);
   const step = direction === "onwards" ? CHAINAGE_STEP : -CHAINAGE_STEP;
   const existing = new Set(numeric);
 
-  let next = lastLodged + step;
+  let next = anchor + step;
   while (existing.has(next)) {
     next += step;
   }
