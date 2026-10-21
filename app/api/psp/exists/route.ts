@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     signOffBy: data?.sign_off_by ?? null,
     signOffAt: data?.sign_off_at ?? null,
     signatureStrokes: data?.signature_strokes ?? null,
-    layersRequired: data?.layers_required ?? 3,
+    layersRequired: data?.layers_required ?? null,
     completedAt: data?.completed_at ?? null,
     layers: data
       ? {

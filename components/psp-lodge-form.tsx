@@ -660,15 +660,19 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
         const payload = await response.json();
-        setRecordId(payload.recordId ?? null);
+        const recordIdNext = payload.recordId ?? null;
+        setRecordId(recordIdNext);
         setSignOffBy(payload.signOffBy ?? null);
         setSignOffAt(payload.signOffAt ?? null);
         setSignatureStrokes(payload.signatureStrokes ?? null);
         const incoming = payload.layers as Record<string, number | null> | null;
         const storedLc = Number(payload.layersRequired);
-        const storedOk = Number.isFinite(storedLc) && storedLc >= 1;
+        // Only freeze layers_required when a real row exists — never the API default.
+        const storedOk =
+          Boolean(recordIdNext) &&
+          Number.isFinite(storedLc) &&
+          storedLc >= 1;
         const fromKeys = maxLayerIndexFromLayers(incoming);
-        // Existing record: honour frozen layers_required from the row.
         const nextCount = storedOk
           ? Math.min(5, Math.max(1, Math.floor(storedLc)))
           : layersLockedToConfig
@@ -685,6 +689,9 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             }
             return next;
           });
+        } else {
+          // Empty chainage: drop previous record's lift values / layer count sticky state.
+          setLayers({});
         }
       } catch (error) {
         pushToast({
