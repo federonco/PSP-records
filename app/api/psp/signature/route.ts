@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 
 type SignaturePayload = {
   version: number;
@@ -9,7 +13,7 @@ type SignaturePayload = {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const {
+  let {
     locationId,
     unifiedSectionId,
     subsectionId,
@@ -17,6 +21,22 @@ export async function POST(request: NextRequest) {
     inspectorName,
     signatureStrokes,
   } = body;
+
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {
+      unifiedSectionId:
+        unifiedSectionId != null ? String(unifiedSectionId) : null,
+      subsectionId: subsectionId != null ? String(subsectionId) : null,
+    },
+    readQrToken(request, body as Record<string, unknown>),
+  );
+  if (!gate.ok) return gate.response;
+
+  if (gate.forced) {
+    unifiedSectionId = gate.forced.unifiedSectionId;
+    subsectionId = gate.forced.subsectionId;
+  }
 
   if (Number.isNaN(Number(chainage)) || !inspectorName) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -50,7 +70,7 @@ export async function POST(request: NextRequest) {
     .select("id")
     .eq("chainage", Number(chainage));
 
-  if (hasLocation) {
+  if (hasLocation && !gate.forced) {
     q = q.eq("location_id", String(locationId).trim());
   } else {
     q = q.eq("unified_section_id", String(unifiedSectionId).trim());

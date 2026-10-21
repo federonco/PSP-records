@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { mergeLocationAppConfig } from "@/lib/location-app-config";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { token } = await getUserFromRequest(request);
   const { id } = await params;
 
   if (!id) {
@@ -15,6 +17,13 @@ export async function PATCH(
   }
 
   const body = await request.json();
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {},
+    readQrToken(request, body as Record<string, unknown>),
+  );
+  if (!gate.ok) return gate.response;
+
   const { penetrometerSn } = body;
 
   if (penetrometerSn == null) {
@@ -26,6 +35,7 @@ export async function PATCH(
 
   const sn = String(penetrometerSn).trim();
 
+  const token = gate.accessToken;
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });

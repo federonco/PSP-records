@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const { token } = await getUserFromRequest(request);
   const { id } = await params;
   if (!id) {
     return NextResponse.json({ error: "Missing id" }, { status: 400 });
   }
 
   const body = await request.json();
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {},
+    readQrToken(request, body as Record<string, unknown>),
+  );
+  if (!gate.ok) return gate.response;
+
   const { serialText } = body;
   if (!serialText || typeof serialText !== "string") {
     return NextResponse.json(
@@ -29,6 +38,7 @@ export async function PATCH(
     );
   }
 
+  const token = gate.accessToken;
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });

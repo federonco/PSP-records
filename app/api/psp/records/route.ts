@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
 import { CHAINAGE_STEP } from "@/lib/psp";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import { resolveLocationId, validateSaveData } from "@/lib/psp-logic";
 import {
@@ -39,11 +42,29 @@ function buildRecordPayload(validation: {
 }
 
 export async function POST(request: NextRequest) {
-  const { token } = await getUserFromRequest(request);
-
   const body = await request.json();
-  const sectionIdFromBody =
+  let sectionIdFromBody =
     String(body?.unifiedSectionId ?? body?.sectionId ?? "").trim() || null;
+  let subsectionIdRaw =
+    String(body?.subsectionId ?? "").trim() || null;
+
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {
+      unifiedSectionId: sectionIdFromBody,
+      subsectionId: subsectionIdRaw,
+    },
+    readQrToken(request, body as Record<string, unknown>),
+  );
+  if (!gate.ok) return gate.response;
+
+  if (gate.forced) {
+    sectionIdFromBody = gate.forced.unifiedSectionId;
+    subsectionIdRaw = gate.forced.subsectionId;
+    body.unifiedSectionId = sectionIdFromBody;
+    body.subsectionId = subsectionIdRaw;
+  }
+
   if (!sectionIdFromBody) {
     return NextResponse.json({ error: "unifiedSectionId is required" }, { status: 400 });
   }
@@ -52,6 +73,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid chainage" }, { status: 400 });
   }
 
+  const token = gate.accessToken;
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
@@ -72,9 +94,6 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-
-  const subsectionIdRaw =
-    String(body?.subsectionId ?? "").trim() || null;
 
   let subsectionAppConfig: unknown = null;
   if (subsectionIdRaw) {

@@ -1,17 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 
 const DEFAULT_SN = "#3059-0325";
 
 export async function GET(request: NextRequest) {
-  const { token } = await getUserFromRequest(request);
   const { searchParams } = new URL(request.url);
   const locationId = searchParams.get("locationId");
   if (!locationId) {
     return NextResponse.json({ error: "Missing locationId" }, { status: 400 });
   }
 
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {},
+    readQrToken(request),
+  );
+  if (!gate.ok) return gate.response;
+
+  const token = gate.accessToken;
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });
@@ -37,9 +47,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { token } = await getUserFromRequest(request);
   const body = await request.json();
   const { locationId, serialText } = body;
+
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {},
+    readQrToken(request, body as Record<string, unknown>),
+  );
+  if (!gate.ok) return gate.response;
 
   if (!locationId || !serialText || typeof serialText !== "string") {
     return NextResponse.json(
@@ -56,6 +72,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const token = gate.accessToken;
   const supabase = token
     ? getSupabaseServer({ accessToken: token })
     : getSupabaseServer({ useServiceRole: true });

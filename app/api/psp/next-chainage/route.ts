@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getUserFromRequest } from "@/lib/api-auth";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import {
   getNextChainageFromSet,
@@ -7,15 +6,29 @@ import {
   resolveTravelDirection,
 } from "@/lib/psp-logic";
 import { CHAINAGE_STEP } from "@/lib/psp";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 
 export async function GET(request: NextRequest) {
-  const { token } = await getUserFromRequest(request);
-
   const { searchParams } = new URL(request.url);
+  let unifiedSectionId = searchParams.get("unifiedSectionId")?.trim() || null;
+  let subsectionId = searchParams.get("subsectionId")?.trim() || null;
   const locationIdParam = searchParams.get("locationId");
   const locationName = searchParams.get("location");
-  const unifiedSectionId = searchParams.get("unifiedSectionId")?.trim() || null;
-  const subsectionId = searchParams.get("subsectionId")?.trim() || null;
+
+  const gate = await requireQrScopeOrAuth(
+    request,
+    { unifiedSectionId, subsectionId },
+    readQrToken(request),
+  );
+  if (!gate.ok) return gate.response;
+
+  if (gate.forced) {
+    unifiedSectionId = gate.forced.unifiedSectionId;
+    subsectionId = gate.forced.subsectionId;
+  }
 
   if (!unifiedSectionId) {
     return NextResponse.json(
@@ -24,6 +37,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  const token = gate.accessToken;
   const resolvedLocationId = await resolveLocationId({
     locationId: locationIdParam,
     locationName,

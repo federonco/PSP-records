@@ -1,18 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnSiteBAdmin } from "@/lib/admin";
+import {
+  readQrToken,
+  requireQrScopeOrAuth,
+} from "@/lib/psp/resolve-qr-scope";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
-/** Public read for lodge form: operators may not be signed in; scope is section/subsection UUID from QR. */
+/** Lodge form: auth admin OR qrToken scoped to the requested section/subsection. */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const sectionId = searchParams.get("section_id")?.trim() || null;
-  const subsectionId = searchParams.get("subsection_id")?.trim() || null;
+  let sectionId = searchParams.get("section_id")?.trim() || null;
+  let subsectionId = searchParams.get("subsection_id")?.trim() || null;
+
+  const gate = await requireQrScopeOrAuth(
+    request,
+    {
+      // Assignments query uses subsection_id alone; map to QR claimed fields.
+      unifiedSectionId: sectionId,
+      subsectionId,
+    },
+    readQrToken(request),
+  );
+  if (!gate.ok) return gate.response;
+
+  if (gate.forced) {
+    if (gate.forced.subsectionId) {
+      subsectionId = gate.forced.subsectionId;
+      sectionId = null;
+    } else {
+      sectionId = gate.forced.unifiedSectionId;
+      subsectionId = null;
+    }
+  }
+
   if (!sectionId && !subsectionId) {
     return NextResponse.json(
       { error: "Provide section_id or subsection_id" },
       { status: 400 },
     );
   }
+
+  // Subsection QR claiming section_id only would have been forced to subsection.
+  // Section QR must not accept a subsection_id query (already rejected in gate).
 
   const adminSupabase = getSupabaseServer({ useServiceRole: true });
   let query = adminSupabase

@@ -23,6 +23,7 @@ function mapEnterPayload(payload: Record<string, unknown>): PspLodgeLockedEntry 
 
   if (typ === "section") {
     return {
+      qrToken: "",
       unifiedSectionId: String(payload.id ?? ""),
       subsectionId: null,
       sectionName: String(payload.name ?? ""),
@@ -42,6 +43,7 @@ function mapEnterPayload(payload: Record<string, unknown>): PspLodgeLockedEntry 
   const parentRow = Array.isArray(parent) ? parent[0] : parent;
 
   return {
+    qrToken: "",
     unifiedSectionId: String(parentRow?.id ?? payload.section_id ?? ""),
     subsectionId: String(payload.id ?? ""),
     sectionName: String(parentRow?.name ?? ""),
@@ -90,7 +92,10 @@ function EnterContent() {
           setState({ status: "error", message: INVALID_MSG });
           return;
         }
-        setState({ status: "ok", locked: mapEnterPayload(payload) });
+        setState({
+          status: "ok",
+          locked: { ...mapEnterPayload(payload), qrToken: token },
+        });
       } catch {
         if (!cancelled) setState({ status: "error", message: INVALID_MSG });
       }

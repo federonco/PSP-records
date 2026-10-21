@@ -140,6 +140,8 @@ function maxLayerIndexFromLayers(obj: Record<string, unknown> | null): number {
 type SupervisorOption = { id: string; name: string; company: string | null };
 
 export type PspLodgeLockedEntry = {
+  /** QR token from /enter — sent on unauthenticated lodge API calls. */
+  qrToken: string;
   /** Legacy PSP site row; optional when entering via unified QR only. */
   locationId?: string | null;
   locationName?: string | null;
@@ -347,9 +349,17 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     let cancelled = false;
     const load = async () => {
       const token = await getBrowserAccessToken();
-      const response = await fetch("/api/psp/sections", {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      const usp = new URLSearchParams();
+      if (lockedEntry?.qrToken) {
+        usp.set("qrToken", lockedEntry.qrToken);
+      }
+      const qs = usp.toString();
+      const response = await fetch(
+        qs ? `/api/psp/sections?${qs}` : "/api/psp/sections",
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        },
+      );
       const payload = await response.json();
       if (!response.ok) {
         if (!cancelled) {
@@ -370,13 +380,13 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     return () => {
       cancelled = true;
     };
-  }, [pushToast]);
+  }, [lockedEntry?.qrToken, pushToast]);
 
   useEffect(() => {
-    if (!lockedEntry || !sections.length) return;
+    if (!lockedEntry) return;
     setSelectedSectionId(lockedEntry.unifiedSectionId);
     setSelectedSubsectionId(lockedEntry.subsectionId);
-  }, [lockedEntry, sections]);
+  }, [lockedEntry]);
 
   useEffect(() => {
     setLayerCount(resolvedLayersRequired);
@@ -502,8 +512,10 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     if (!locationId) return;
     const loadOptions = async () => {
       const token = await getBrowserAccessToken();
+      const usp = new URLSearchParams({ locationId });
+      if (lockedEntry?.qrToken) usp.set("qrToken", lockedEntry.qrToken);
       const response = await fetch(
-        `/api/psp/penetrometer-options?locationId=${locationId}`,
+        `/api/psp/penetrometer-options?${usp.toString()}`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         },
@@ -516,7 +528,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       }
     };
     loadOptions();
-  }, [locationId]);
+  }, [locationId, lockedEntry?.qrToken]);
 
   useEffect(() => {
     if (!unifiedSectionId) {
@@ -525,12 +537,18 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     }
     const loadSupervisors = async () => {
       const token = await getBrowserAccessToken();
-      const query = selectedSubsectionId
-        ? `subsection_id=${selectedSubsectionId}`
-        : `section_id=${unifiedSectionId}`;
-      const response = await fetch(`/api/psp/supervisors/assignments?${query}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
+      const usp = new URLSearchParams(
+        selectedSubsectionId
+          ? { subsection_id: selectedSubsectionId }
+          : { section_id: unifiedSectionId },
+      );
+      if (lockedEntry?.qrToken) usp.set("qrToken", lockedEntry.qrToken);
+      const response = await fetch(
+        `/api/psp/supervisors/assignments?${usp.toString()}`,
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        },
+      );
       const payload = await response.json();
       if (!response.ok) {
         setSupervisorOptions([]);
@@ -539,7 +557,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
       setSupervisorOptions((payload.supervisors ?? []) as SupervisorOption[]);
     };
     void loadSupervisors();
-  }, [selectedSubsectionId, unifiedSectionId]);
+  }, [selectedSubsectionId, unifiedSectionId, lockedEntry?.qrToken]);
 
   useEffect(() => {
     if (!inspectorSupervisorId) return;
@@ -567,6 +585,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             usp.set("location", locationName.trim());
           }
         }
+        if (lockedEntry?.qrToken) usp.set("qrToken", lockedEntry.qrToken);
         const response = await fetch(`/api/psp/next-chainage?${usp.toString()}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
@@ -608,6 +627,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     subsectionIdForApi,
     chainageScope,
     subsectionGridActive,
+    lockedEntry?.qrToken,
     pushToast,
     supabase,
   ]);
@@ -623,7 +643,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
   };
 
   useEffect(() => {
-    if (!unifiedSectionId || !chainage) return;
+    if (!unifiedSectionId || !Number.isFinite(chainage) || chainage < 0) return;
      const checkDuplicate = async () => {
       setChecking(true);
       try {
@@ -635,6 +655,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         if (subsectionIdForApi) {
           usp.set("subsectionId", subsectionIdForApi);
         }
+        if (lockedEntry?.qrToken) usp.set("qrToken", lockedEntry.qrToken);
         const response = await fetch(`/api/psp/exists?${usp.toString()}`, {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
@@ -682,6 +703,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
     subsectionIdForApi,
     layersLockedToConfig,
     resolvedLayersRequired,
+    lockedEntry?.qrToken,
     pushToast,
     supabase,
   ]);
@@ -703,7 +725,8 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
    const canSubmit =
      !(subsectionGridActive && rangeComplete) &&
      unifiedSectionId &&
-     chainage > 0 &&
+     Number.isFinite(chainage) &&
+     chainage >= 0 &&
      (!chainageScope || isChainageInScope(chainage, chainageScope)) &&
      siteInspector &&
     currentLayerKeys.every((key) => {
@@ -780,6 +803,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          ...(token ? { Authorization: `Bearer ${token}` } : {}),
        },
        body: JSON.stringify({
+         ...(lockedEntry?.qrToken ? { qrToken: lockedEntry.qrToken } : {}),
          ...(locationId?.trim()
            ? { locationId: locationId.trim() }
            : {}),
@@ -820,6 +844,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
+          ...(lockedEntry?.qrToken ? { qrToken: lockedEntry.qrToken } : {}),
           ...(locationId?.trim()
             ? { locationId: locationId.trim() }
             : {
@@ -862,6 +887,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
         usp.set("location", locationName.trim());
       }
     }
+    if (lockedEntry?.qrToken) usp.set("qrToken", lockedEntry.qrToken);
     if (subsectionGridActive && chainageScope) {
       const scopedNext = nextChainageInScope(chainage, chainageScope);
       if (scopedNext == null) {
@@ -901,6 +927,7 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
          ...(token ? { Authorization: `Bearer ${token}` } : {}),
        },
        body: JSON.stringify({
+         ...(lockedEntry?.qrToken ? { qrToken: lockedEntry.qrToken } : {}),
          ...(locationId?.trim()
            ? { locationId: locationId.trim() }
            : {
@@ -991,34 +1018,37 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
             </div>
           )}
 
-          {selectedSection &&
-          (selectedSection.subsections?.length ?? 0) > 0 ? (
+          {lockedEntry && lockedEntry.subsectionId == null ? null : lockedEntry &&
+          lockedEntry.subsectionId != null ? (
             <div>
               <div className="psp-section-label">Subsection</div>
-              {lockedEntry && lockedEntry.subsectionId != null ? (
-                <p className="mt-[14px] text-sm font-semibold text-[var(--ink)]">
-                  {lockedEntry.subsectionName ?? "—"}
-                </p>
-              ) : (
-                <Select
-                  value={selectedSubsectionId ?? "__none__"}
-                  onValueChange={(v) =>
-                    setSelectedSubsectionId(v === "__none__" ? null : v)
-                  }
-                >
-                  <SelectTrigger className="psp-input mt-[14px] w-full bg-[var(--inner-bg)]">
-                    <SelectValue placeholder="Subsection" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">— None —</SelectItem>
-                    {selectedSection.subsections.map((sub) => (
-                      <SelectItem key={sub.id} value={sub.id}>
-                        {sub.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <p className="mt-[14px] text-sm font-semibold text-[var(--ink)]">
+                {lockedEntry.subsectionName ?? "—"}
+              </p>
+            </div>
+          ) : selectedSection &&
+            (selectedSection.subsections?.length ?? 0) > 0 ? (
+            <div>
+              <div className="psp-section-label">Subsection</div>
+              <Select
+                value={selectedSubsectionId ?? "__none__"}
+                onValueChange={(v) => {
+                  if (lockedEntry) return;
+                  setSelectedSubsectionId(v === "__none__" ? null : v);
+                }}
+              >
+                <SelectTrigger className="psp-input mt-[14px] w-full bg-[var(--inner-bg)]">
+                  <SelectValue placeholder="Subsection" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— None —</SelectItem>
+                  {selectedSection.subsections.map((sub) => (
+                    <SelectItem key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           ) : null}
         </div>
@@ -1108,7 +1138,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                           "Content-Type": "application/json",
                           ...(token ? { Authorization: `Bearer ${token}` } : {}),
                         },
-                        body: JSON.stringify({ penetrometerSn: value }),
+                        body: JSON.stringify({
+                          penetrometerSn: value,
+                          ...(lockedEntry?.qrToken
+                            ? { qrToken: lockedEntry.qrToken }
+                            : {}),
+                        }),
                       });
                       if (res.ok) {
                         setActiveLocation((prev) =>
@@ -1426,7 +1461,13 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                     "Content-Type": "application/json",
                     ...(token ? { Authorization: `Bearer ${token}` } : {}),
                   },
-                  body: JSON.stringify({ locationId, serialText: text }),
+                  body: JSON.stringify({
+                    locationId,
+                    serialText: text,
+                    ...(lockedEntry?.qrToken
+                      ? { qrToken: lockedEntry.qrToken }
+                      : {}),
+                  }),
                 });
                 const payload = await res.json();
                 if (res.ok) {
@@ -1516,7 +1557,12 @@ export function PspLodgeForm({ lockedEntry = null }: PspLodgeFormProps) {
                       "Content-Type": "application/json",
                       ...(token ? { Authorization: `Bearer ${token}` } : {}),
                     },
-                    body: JSON.stringify({ serialText: text }),
+                    body: JSON.stringify({
+                      serialText: text,
+                      ...(lockedEntry?.qrToken
+                        ? { qrToken: lockedEntry.qrToken }
+                        : {}),
+                    }),
                   },
                 );
                 const payload = await res.json();
