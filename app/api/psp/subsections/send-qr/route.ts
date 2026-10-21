@@ -13,7 +13,8 @@ import { generateSectionQrPdf } from "@/lib/reporting/section-qr-pdf";
 export const runtime = "nodejs";
 
 function safePdfFilename(name: string) {
-  const cleaned = name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim() || "Subsection";
+  const cleaned =
+    name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim() || "Subsection";
   return `QR-${cleaned}.pdf`;
 }
 
@@ -31,33 +32,63 @@ export async function POST(request: NextRequest) {
   const subsectionId = body.subsectionId?.trim();
   const email = body.email?.trim();
   if (!subsectionId || !email) {
-    return NextResponse.json({ error: "Missing subsectionId or email" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing subsectionId or email" },
+      { status: 400 },
+    );
   }
 
   const supabase = getSupabaseServer({ useServiceRole: true });
   const { data: row, error: secErr } = await supabase
     .from("subsections")
-    .select("id,name")
+    .select("id,name,section_id,sections(name)")
     .eq("id", subsectionId)
     .single();
 
   if (secErr || !row) {
-    return NextResponse.json({ error: secErr?.message ?? "Subsection not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: secErr?.message ?? "Subsection not found" },
+      { status: 404 },
+    );
   }
 
-  const name = row.name as string;
+  const subsectionName = row.name as string;
+  const parent = row.sections as
+    | { name: string }
+    | { name: string }[]
+    | null
+    | undefined;
+  const parentRow = Array.isArray(parent) ? parent[0] : parent;
+  const sectionName =
+    parentRow?.name && String(parentRow.name).trim()
+      ? String(parentRow.name).trim()
+      : null;
 
   try {
     const { url } = await ensureSubsectionQrToken(supabase, subsectionId);
-    const pdfBuffer = await generateSectionQrPdf(name, url);
-    const filename = safePdfFilename(name);
+    const pdfTitle = sectionName ?? subsectionName;
+    const pdfSubtitle = sectionName ? subsectionName : undefined;
+    const pdfBuffer = await generateSectionQrPdf({
+      title: pdfTitle,
+      ...(pdfSubtitle ? { subtitle: pdfSubtitle } : {}),
+      qrUrl: url,
+    });
+    const fileLabel = sectionName
+      ? `${sectionName} - ${subsectionName}`
+      : subsectionName;
+    const filename = safePdfFilename(fileLabel);
+    const mailLabel = sectionName
+      ? `${sectionName} — ${subsectionName}`
+      : subsectionName;
 
     await sendEmail({
       from: getSenderAddress(),
       to: email,
-      subject: `QR Code — ${name}`,
-      text: buildQrEmailText(name, url),
-      html: buildQrEmailHtml(name, url),
+      subject: sectionName
+        ? `QR Code — ${sectionName} — ${subsectionName}`
+        : `QR Code — ${subsectionName}`,
+      text: buildQrEmailText(mailLabel, url),
+      html: buildQrEmailHtml(mailLabel, url),
       attachments: [
         {
           filename,

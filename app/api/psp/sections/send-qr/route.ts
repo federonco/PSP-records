@@ -49,7 +49,10 @@ export async function POST(request: NextRequest) {
 
   try {
     const { url } = await ensureUnifiedSectionQrToken(supabase, sectionId);
-    const pdfBuffer = await generateSectionQrPdf(sectionName, url);
+    const pdfBuffer = await generateSectionQrPdf({
+      title: sectionName,
+      qrUrl: url,
+    });
     const filename = safePdfFilename(sectionName);
 
     await sendEmail({
